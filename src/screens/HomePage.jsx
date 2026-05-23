@@ -37,7 +37,7 @@ function HomePage() {
   };
 
   useEffect(() => {
-    fetchCampaigns();
+    // fetchCampaigns();
   }, []);
 
   // Sort campaigns: 'Sedang berjalan' first, then 'Selesai'

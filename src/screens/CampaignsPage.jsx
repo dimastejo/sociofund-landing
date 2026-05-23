@@ -49,7 +49,7 @@ function CampaignsPage() {
   };
 
   useEffect(() => {
-    fetchCampaigns();
+    // fetchCampaigns();
   }, []);
 
   const handleCategoryToggle = (category) => {
