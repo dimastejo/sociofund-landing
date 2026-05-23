@@ -14,8 +14,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="id">
       <body>
-        {children}
-        <Providers />
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header.jsx";
 import Footer from "@/components/Footer.jsx";
 import CampaignCard from "@/components/CampaignCard.jsx";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import pb from "@/lib/pocketbaseClient.js";
+import { getPageSections } from "@/services/cmsService.js";
 import {
   AlertCircle,
   BookOpen,
@@ -17,14 +19,12 @@ import {
   HeartHandshake as Handshake,
   Microscope,
   School,
+  Search,
+  Heart,
+  Award,
+  TrendingUp,
+  Users,
 } from "lucide-react";
-import { Search } from "lucide-react";
-import { Heart } from "lucide-react";
-import { Award } from "lucide-react";
-import { TrendingUp } from "lucide-react";
-import { Users } from "lucide-react";
-
-const CMS_SECTIONS_URL = "/api/cms/page-sections?page=Home";
 
 const PILLAR_ICONS = [Handshake, GraduationCap, Microscope, School];
 const ICON_BY_NAME = {
@@ -316,28 +316,18 @@ const steps = [
 ];
 
 function HomePage() {
-  const [sections, setSections] = useState([]);
-  const [isSectionsLoading, setIsSectionsLoading] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
   const [isCampaignsLoading, setIsCampaignsLoading] = useState(true);
   const [campaignError, setCampaignError] = useState(null);
-
-  const fetchPageSections = async () => {
-    try {
-      setIsSectionsLoading(true);
-      const response = await fetch(CMS_SECTIONS_URL, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const result = await response.json();
-      if (result.valid && Array.isArray(result.data)) {
-        setSections(normalizeSections(result.data));
-      }
-    } catch (error) {
-      console.error("Gagal memuat section CMS:", error);
-    } finally {
-      setIsSectionsLoading(false);
-    }
-  };
+  const { data: sections = [], isLoading: isSectionsLoading } = useQuery({
+    queryKey: ["cms", "page-sections", "Home"],
+    queryFn: async () => {
+      const result = await getPageSections("Home");
+      return result.valid && Array.isArray(result.data)
+        ? normalizeSections(result.data)
+        : [];
+    },
+  });
 
   const fetchCampaigns = async () => {
     try {
@@ -358,7 +348,6 @@ function HomePage() {
   };
 
   useEffect(() => {
-    fetchPageSections();
     // fetchCampaigns();
   }, []);
 
