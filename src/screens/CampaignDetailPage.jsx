@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import CampaignCard from '@/components/CampaignCard.jsx';
@@ -15,45 +16,93 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import pb from '@/lib/pocketbaseClient.js';
-import { Users, Target, Calendar, TrendingUp, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Users, Calendar, ArrowLeft, AlertCircle } from 'lucide-react';
+
+const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns';
+const CAMPAIGN_DETAIL_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaign';
+const FALLBACK_IMAGE_URL = 'https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg';
+
+function normalizeCampaign(campaign) {
+  const collectedAmount = Number(campaign.collected_amount) || 0;
+  const targetAmount = Number(campaign.target_amount) || 0;
+  const percentage =
+    Number(campaign.collected_percentage) ||
+    (targetAmount > 0 ? Math.round((collectedAmount / targetAmount) * 100) : 0);
+
+  return {
+    ...campaign,
+    nama: campaign.title,
+    image: campaign.image_url,
+    dana_terkumpul: collectedAmount,
+    target_dana: targetAmount,
+    persentase: percentage,
+    deskripsi: campaign.description || campaign.short_description,
+    created: campaign.created_at,
+  };
+}
+
+async function fetchCampaignDetail(slug) {
+  const response = await fetch(`${CAMPAIGN_DETAIL_API_URL}/${encodeURIComponent(slug)}`);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+  const campaign = result?.data?.data;
+
+  if (!result.valid || !result.data?.valid || !campaign) {
+    throw new Error(result.message || 'Format data kampanye tidak valid');
+  }
+
+  return normalizeCampaign(campaign);
+}
+
+async function fetchRelatedCampaigns(currentCampaign) {
+  const response = await fetch(CAMPAIGNS_API_URL);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.valid || !Array.isArray(result.data)) {
+    throw new Error(result.message || 'Format data kampanye terkait tidak valid');
+  }
+
+  return result.data
+    .filter(campaign => campaign.slug !== currentCampaign.slug && campaign.id !== currentCampaign.id)
+    .slice(0, 2)
+    .map(normalizeCampaign);
+}
+
+async function fetchCampaignData(slug) {
+  const campaign = await fetchCampaignDetail(slug);
+  let relatedCampaigns = [];
+
+  try {
+    relatedCampaigns = await fetchRelatedCampaigns(campaign);
+  } catch (error) {
+    console.error('Error fetching related campaigns:', error);
+  }
+
+  return { campaign, relatedCampaigns };
+}
 
 function CampaignDetailPage({ id }) {
-  const [campaign, setCampaign] = useState(null);
-  const [relatedCampaigns, setRelatedCampaigns] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchCampaignData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Fetch main campaign
-        const record = await pb.collection('campaigns').getOne(id, { $autoCancel: false });
-        setCampaign(record);
-
-        // Fetch related campaigns (excluding current one)
-        const related = await pb.collection('campaigns').getList(1, 2, {
-          filter: `id != "${id}"`,
-          $autoCancel: false,
-          sort: '-created'
-        });
-        setRelatedCampaigns(related.items);
-      } catch (err) {
-        console.error("Error fetching campaign details:", err);
-        setError("Kampanye tidak ditemukan atau terjadi kesalahan.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (id) {
-      fetchCampaignData();
-    }
-  }, [id]);
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['campaign-detail', id],
+    queryFn: () => fetchCampaignData(id),
+    enabled: Boolean(id),
+  });
+  const campaign = data?.campaign;
+  const relatedCampaigns = data?.relatedCampaigns || [];
 
   if (isLoading) {
     return (
@@ -76,7 +125,7 @@ function CampaignDetailPage({ id }) {
     );
   }
 
-  if (error || !campaign) {
+  if (isError || !campaign) {
     return (
       <>
         <Header />
@@ -84,7 +133,7 @@ function CampaignDetailPage({ id }) {
           <div className="text-center max-w-md mx-auto p-8 bg-background rounded-2xl shadow-sm border border-border">
             <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-4">Kampanye tidak ditemukan</h2>
-            <p className="text-muted-foreground mb-6">{error || "Data kampanye yang Anda cari tidak tersedia."}</p>
+            <p className="text-muted-foreground mb-6">Kampanye tidak ditemukan atau terjadi kesalahan.</p>
             <Link href="/campaigns">
               <Button className="transition-all active:scale-[0.98]">Kembali ke daftar kampanye</Button>
             </Link>
@@ -117,20 +166,10 @@ function CampaignDetailPage({ id }) {
   };
 
   // Resolve header image URL
-  let headerImageUrl = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
-  if (campaign.image) {
-    if (typeof campaign.image === 'string' && (campaign.image.startsWith('http') || campaign.image.startsWith('data:'))) {
-      headerImageUrl = campaign.image;
-    } else if (campaign.collectionId && campaign.id) {
-      headerImageUrl = pb.files.getUrl(campaign, campaign.image);
-    }
-    
-    // Add cache-busting
-    if (headerImageUrl.startsWith('http')) {
-      const separator = headerImageUrl.includes('?') ? '&' : '?';
-      headerImageUrl = `${headerImageUrl}${separator}t=${Date.now()}`;
-    }
-  }
+  const headerImageUrl =
+    typeof campaign.image === 'string' && campaign.image
+      ? campaign.image
+      : FALLBACK_IMAGE_URL;
 
   // Mock data for fields not in the database schema to keep the UI rich
   const mockDonationTiers = [
@@ -158,7 +197,7 @@ function CampaignDetailPage({ id }) {
               alt={campaign.nama || 'Kampanye'}
               className="w-full h-full object-cover img-enhanced"
               onError={(e) => {
-                e.target.src = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
+                e.target.src = FALLBACK_IMAGE_URL;
               }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
@@ -204,7 +243,7 @@ function CampaignDetailPage({ id }) {
                             <p className="text-sm font-medium text-muted-foreground mb-1">Donatur</p>
                             <p className="text-xl font-bold text-foreground flex items-center">
                               <Users className="w-5 h-5 mr-1.5 text-muted-foreground" />
-                              {Math.floor(danaTerkumpul / 150000) || 12}
+                              {campaign.donor_count || 0}
                             </p>
                           </div>
                           <div>
@@ -321,7 +360,7 @@ function CampaignDetailPage({ id }) {
                     <Button variant="outline" className="hidden sm:flex">Lihat Semua</Button>
                   </Link>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {relatedCampaigns.map((relatedCampaign, index) => (
                     <CampaignCard key={relatedCampaign.id} campaign={relatedCampaign} index={index} />
                   ))}

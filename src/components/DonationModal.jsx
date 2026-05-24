@@ -1,24 +1,29 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import { Check } from "lucide-react";
+import { useEffect } from "react";
 
 function DonationModal({ isOpen, onClose, campaign }) {
   const [selectedAmount, setSelectedAmount] = useState(null);
-  const [customAmount, setCustomAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState("");
   const [donorInfo, setDonorInfo] = useState({
-    name: '',
-    email: '',
-    phone: ''
+    name: "",
+    email: "",
+    phone: "",
   });
-  const [message, setMessage] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('bank');
+  const [message, setMessage] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -27,11 +32,11 @@ function DonationModal({ isOpen, onClose, campaign }) {
 
   const handleAmountSelect = (amount) => {
     setSelectedAmount(amount);
-    setCustomAmount('');
+    setCustomAmount("");
   };
 
   const handleCustomAmountChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '');
+    const value = e.target.value.replace(/\D/g, "");
     setCustomAmount(value);
     setSelectedAmount(null);
   };
@@ -41,68 +46,127 @@ function DonationModal({ isOpen, onClose, campaign }) {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
     }).format(amount);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (getFinalAmount() < 10000) {
-      toast.error('Minimum donasi adalah Rp 10.000');
+      toast.error("Minimum donasi adalah Rp 10.000");
       return;
     }
 
     if (!donorInfo.name || !donorInfo.email || !donorInfo.phone) {
-      toast.error('Mohon lengkapi semua informasi donatur');
+      toast.error("Mohon lengkapi semua informasi donatur");
       return;
     }
 
     if (!agreedToTerms) {
-      toast.error('Mohon setujui syarat dan ketentuan');
+      toast.error("Mohon setujui syarat dan ketentuan");
       return;
     }
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const donation = {
-        campaignId: campaign.id,
-        campaignTitle: campaign.title,
-        amount: getFinalAmount(),
-        donorInfo,
-        message,
-        paymentMethod,
-        timestamp: new Date().toISOString()
-      };
-
-      const existingDonations = JSON.parse(localStorage.getItem('donations') || '[]');
-      existingDonations.push(donation);
-      localStorage.setItem('donations', JSON.stringify(existingDonations));
-
+    try {
+      await handleMidtrans();
+    } catch (error) {
+      console.error("Error processing donation:", error);
+      toast.error("Gagal memproses donasi. Silakan coba lagi.");
       setIsSubmitting(false);
-      setShowSuccess(true);
+    }
+  };
 
-      setTimeout(() => {
-        setShowSuccess(false);
+  const handleMidtrans = async () => {
+    const payload = {
+      campaign_id: campaign.id,
+      donor_name: donorInfo.name.trim(),
+      donor_email: donorInfo.email.trim(),
+      donor_phone: donorInfo.phone.trim(),
+      amount: getFinalAmount(),
+      is_anonymous: 0,
+    };
+
+    const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+    const token = data.token || data.data?.token;
+    onClose();
+
+    if (!r.ok || !token) {
+      throw new Error(data.message || "Token pembayaran tidak tersedia");
+    }
+
+    if (typeof window === "undefined" || !window.snap?.pay) {
+      throw new Error("Midtrans Snap belum tersedia");
+    }
+
+    // @ts-ignore
+    window.snap.pay(token, {
+      onSuccess: () => {
+        setIsSubmitting(false);
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onClose();
+          resetForm();
+          toast.success("Terima kasih atas donasi Anda");
+        }, 3000);
+      },
+      onPending: () => {
+        setIsSubmitting(false);
         onClose();
         resetForm();
-        toast.success('Terima kasih atas donasi Anda');
-      }, 3000);
-    }, 1500);
+        toast.success("Instruksi pembayaran telah dibuat");
+      },
+      onError: () => {
+        setIsSubmitting(false);
+        toast.error("Pembayaran gagal diproses");
+      },
+      onClose: () => {
+        setIsSubmitting(false);
+      },
+    });
   };
 
   const resetForm = () => {
     setSelectedAmount(null);
-    setCustomAmount('');
-    setDonorInfo({ name: '', email: '', phone: '' });
-    setMessage('');
-    setPaymentMethod('bank');
+    setCustomAmount("");
+    setDonorInfo({ name: "", email: "", phone: "" });
+    setMessage("");
     setAgreedToTerms(false);
   };
+
+  useEffect(() => {
+    // You can also change below url value to any script url you wish to load,
+    // for example this is snap.js for Sandbox Env (Note: remove `.sandbox` from url if you want to use production version)
+    const midtransScriptUrl = "https://app.sandbox.midtrans.com/snap/snap.js";
+
+    let scriptTag = document.createElement("script");
+    scriptTag.src = midtransScriptUrl;
+
+    // Optional: set script attribute, for example snap.js have data-client-key attribute
+    // (change the value according to your client-key)
+    const myMidtransClientKey = "SB-Mid-client-0C4gPKQXqUx1FweT";
+    scriptTag.setAttribute("data-client-key", myMidtransClientKey);
+
+    document.body.appendChild(scriptTag);
+
+    return () => {
+      document.body.removeChild(scriptTag);
+    };
+  }, []);
 
   if (!campaign) return null;
 
@@ -112,7 +176,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
         {!showSuccess ? (
           <>
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold">{campaign.title}</DialogTitle>
+              <DialogTitle className="text-2xl font-bold">
+                {campaign.title}
+              </DialogTitle>
               <DialogDescription>
                 Pilih jumlah donasi dan lengkapi informasi Anda
               </DialogDescription>
@@ -120,14 +186,18 @@ function DonationModal({ isOpen, onClose, campaign }) {
 
             <form onSubmit={handleSubmit} className="space-y-6 mt-4">
               <div>
-                <Label className="text-base font-semibold mb-3 block">Pilih jumlah donasi</Label>
+                <Label className="text-base font-semibold mb-3 block">
+                  Pilih jumlah donasi
+                </Label>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   {presetAmounts.map((amount) => (
                     <Button
                       key={amount}
                       type="button"
-                      variant={selectedAmount === amount ? "default" : "outline"}
-                      className={`h-auto py-4 font-bold text-lg ${selectedAmount === amount ? 'bg-primary text-primary-foreground' : ''}`}
+                      variant={
+                        selectedAmount === amount ? "default" : "outline"
+                      }
+                      className={`h-auto py-4 font-bold text-lg ${selectedAmount === amount ? "bg-primary text-primary-foreground" : ""}`}
                       onClick={() => handleAmountSelect(amount)}
                     >
                       {formatCurrency(amount)}
@@ -135,7 +205,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
                   ))}
                 </div>
                 <div>
-                  <Label htmlFor="customAmount" className="text-sm mb-2 block">Atau masukkan jumlah lain</Label>
+                  <Label htmlFor="customAmount" className="text-sm mb-2 block">
+                    Atau masukkan jumlah lain
+                  </Label>
                   <Input
                     id="customAmount"
                     type="text"
@@ -153,7 +225,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
               </div>
 
               <div className="space-y-4">
-                <Label className="text-base font-semibold">Informasi donatur</Label>
+                <Label className="text-base font-semibold">
+                  Informasi donatur
+                </Label>
                 <div>
                   <Label htmlFor="name">Nama lengkap</Label>
                   <Input
@@ -161,7 +235,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
                     type="text"
                     required
                     value={donorInfo.name}
-                    onChange={(e) => setDonorInfo({ ...donorInfo, name: e.target.value })}
+                    onChange={(e) =>
+                      setDonorInfo({ ...donorInfo, name: e.target.value })
+                    }
                     className="text-gray-900 placeholder:text-gray-500"
                   />
                 </div>
@@ -172,7 +248,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
                     type="email"
                     required
                     value={donorInfo.email}
-                    onChange={(e) => setDonorInfo({ ...donorInfo, email: e.target.value })}
+                    onChange={(e) =>
+                      setDonorInfo({ ...donorInfo, email: e.target.value })
+                    }
                     className="text-gray-900 placeholder:text-gray-500"
                   />
                 </div>
@@ -183,7 +261,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
                     type="tel"
                     required
                     value={donorInfo.phone}
-                    onChange={(e) => setDonorInfo({ ...donorInfo, phone: e.target.value })}
+                    onChange={(e) =>
+                      setDonorInfo({ ...donorInfo, phone: e.target.value })
+                    }
                     className="text-gray-900 placeholder:text-gray-500"
                   />
                 </div>
@@ -201,28 +281,18 @@ function DonationModal({ isOpen, onClose, campaign }) {
                 />
               </div>
 
-              <div>
-                <Label className="text-base font-semibold mb-3 block">Metode pembayaran</Label>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="flex items-center space-x-2 border rounded-lg p-4">
-                    <RadioGroupItem value="bank" id="bank" />
-                    <Label htmlFor="bank" className="flex-1 cursor-pointer">Transfer Bank</Label>
-                  </div>
-                  <div className="flex items-center space-x-2 border rounded-lg p-4">
-                    <RadioGroupItem value="ewallet" id="ewallet" />
-                    <Label htmlFor="ewallet" className="flex-1 cursor-pointer">E-wallet (GoPay, OVO, Dana)</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
               <div className="flex items-start space-x-2">
                 <Checkbox
                   id="terms"
                   checked={agreedToTerms}
                   onCheckedChange={setAgreedToTerms}
                 />
-                <Label htmlFor="terms" className="text-sm cursor-pointer leading-relaxed">
-                  Saya setuju dengan syarat dan ketentuan donasi serta kebijakan privasi Education Crowdfunding
+                <Label
+                  htmlFor="terms"
+                  className="text-sm cursor-pointer leading-relaxed"
+                >
+                  Saya setuju dengan syarat dan ketentuan donasi serta kebijakan
+                  privasi Education Crowdfunding
                 </Label>
               </div>
 
@@ -231,7 +301,9 @@ function DonationModal({ isOpen, onClose, campaign }) {
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 text-base font-semibold"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Memproses...' : `Lanjutkan Donasi ${getFinalAmount() > 0 ? formatCurrency(getFinalAmount()) : ''}`}
+                {isSubmitting
+                  ? "Memproses..."
+                  : `Lanjutkan Donasi ${getFinalAmount() > 0 ? formatCurrency(getFinalAmount()) : ""}`}
               </Button>
             </form>
           </>
@@ -242,7 +314,8 @@ function DonationModal({ isOpen, onClose, campaign }) {
             </div>
             <h3 className="text-2xl font-bold mb-3">Donasi berhasil</h3>
             <p className="text-muted-foreground mb-2">
-              Terima kasih atas donasi Anda sebesar {formatCurrency(getFinalAmount())}
+              Terima kasih atas donasi Anda sebesar{" "}
+              {formatCurrency(getFinalAmount())}
             </p>
             <p className="text-sm text-muted-foreground">
               Instruksi pembayaran telah dikirim ke email Anda

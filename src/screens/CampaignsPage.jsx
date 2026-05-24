@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import CampaignCard from '@/components/CampaignCard.jsx';
@@ -11,52 +12,88 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import pb from '@/lib/pocketbaseClient.js';
 import { Search, SlidersHorizontal, AlertCircle } from 'lucide-react';
 
+const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns';
+const CATEGORIES_API_URL = 'https://sdvapp.cloud/api/v1/socio/kategori';
+
+function normalizeCampaign(campaign) {
+  const collectedAmount = Number(campaign.collected_amount) || 0;
+  const targetAmount = Number(campaign.target_amount) || 0;
+  const percentage =
+    Number(campaign.collected_percentage) ||
+    (targetAmount > 0 ? Math.round((collectedAmount / targetAmount) * 100) : 0);
+
+  return {
+    ...campaign,
+    nama: campaign.title,
+    image: campaign.image_url,
+    dana_terkumpul: collectedAmount,
+    target_dana: targetAmount,
+    persentase: percentage,
+    deskripsi: campaign.short_description || campaign.description,
+  };
+}
+
+async function fetchCampaigns() {
+  const response = await fetch(CAMPAIGNS_API_URL);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.valid || !Array.isArray(result.data)) {
+    throw new Error(result.message || 'Format data kampanye tidak valid');
+  }
+
+  return result.data.map(normalizeCampaign);
+}
+
+async function fetchCategories() {
+  const response = await fetch(CATEGORIES_API_URL);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.valid || !Array.isArray(result.data)) {
+    throw new Error(result.message || 'Format data kategori tidak valid');
+  }
+
+  return result.data;
+}
+
 function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState([]);
   const [sortBy, setSortBy] = useState('newest');
   const [showFilters, setShowFilters] = useState(false);
+  const {
+    data: campaigns = [],
+    isLoading,
+    isError,
+    refetch: refetchCampaigns,
+  } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: fetchCampaigns,
+  });
+  const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
+    queryKey: ['campaign-categories'],
+    queryFn: fetchCategories,
+  });
 
-  // Categories used as keywords since the schema doesn't have a direct category field
-  const categories = ['Jepang', 'Jerman', 'Bahasa', 'STEM', 'Seni'];
-  // Updated statuses to match actual database values
-  const statuses = ['Sedang berjalan', 'Selesai'];
+  const statuses = ['active', 'pending', 'rejected'];
 
-  const fetchCampaigns = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const result = await pb.collection('campaigns').getFullList({ 
-        $autoCancel: false,
-        sort: '-created'
-      });
-      
-      // We no longer map resolvedImageUrl here, CampaignCard handles it directly
-      setCampaigns(result);
-    } catch (err) {
-      console.error("Error fetching campaigns:", err);
-      setError("Gagal memuat data kampanye. Silakan coba lagi.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // fetchCampaigns();
-  }, []);
-
-  const handleCategoryToggle = (category) => {
+  const handleCategoryToggle = (categoryId) => {
     setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
     );
   };
 
@@ -72,17 +109,20 @@ function CampaignsPage() {
     let filtered = campaigns.filter(campaign => {
       // Defensive checks: default to empty strings if fields are missing or undefined
       const searchLower = (searchQuery || '').toLowerCase();
-      const nama = (campaign?.nama || '').toLowerCase();
-      const deskripsi = (campaign?.deskripsi || '').toLowerCase();
+      const nama = (campaign?.nama || campaign?.title || '').toLowerCase();
+      const deskripsi = (
+        campaign?.deskripsi ||
+        campaign?.short_description ||
+        campaign?.description ||
+        ''
+      ).toLowerCase();
       const status = campaign?.status || '';
 
       const matchesSearch = nama.includes(searchLower) || deskripsi.includes(searchLower);
 
-      // Match category keywords against nama or deskripsi
-      const matchesCategory = selectedCategories.length === 0 || selectedCategories.some(cat => {
-        const catLower = cat.toLowerCase();
-        return nama.includes(catLower) || deskripsi.includes(catLower);
-      });
+      const matchesCategory =
+        selectedCategories.length === 0 ||
+        selectedCategories.includes(Number(campaign?.category_id));
 
       const matchesStatus = selectedStatus.length === 0 || selectedStatus.includes(status);
 
@@ -171,22 +211,35 @@ function CampaignsPage() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {categories.map(category => (
-                            <div key={category} className="flex items-center space-x-3">
-                              <Checkbox
-                                id={`category-${category}`}
-                                checked={selectedCategories.includes(category)}
-                                onCheckedChange={() => handleCategoryToggle(category)}
-                                className="transition-all"
-                              />
-                              <Label
-                                htmlFor={`category-${category}`}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-foreground"
-                              >
-                                {category}
-                              </Label>
-                            </div>
-                          ))}
+                          {isCategoriesLoading ? (
+                            [1, 2, 3].map((n) => (
+                              <div key={n} className="flex items-center space-x-3">
+                                <Skeleton className="h-4 w-4 rounded-sm" />
+                                <Skeleton className="h-4 w-24" />
+                              </div>
+                            ))
+                          ) : categories.length > 0 ? (
+                            categories.map(category => (
+                              <div key={category.id} className="flex items-center space-x-3">
+                                <Checkbox
+                                  id={`category-${category.id}`}
+                                  checked={selectedCategories.includes(category.id)}
+                                  onCheckedChange={() => handleCategoryToggle(category.id)}
+                                  className="transition-all"
+                                />
+                                <Label
+                                  htmlFor={`category-${category.id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-foreground"
+                                >
+                                  {category.name}
+                                </Label>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Tidak ada kategori.
+                            </p>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -267,14 +320,16 @@ function CampaignsPage() {
                       </Card>
                     ))}
                   </div>
-                ) : error ? (
+                ) : isError ? (
                   <Card className="p-16 text-center border-dashed border-2 shadow-none bg-transparent">
                     <div className="w-20 h-20 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-6">
                       <AlertCircle className="w-10 h-10 text-destructive" />
                     </div>
                     <h3 className="text-xl font-semibold mb-3 text-foreground">Gagal memuat kampanye</h3>
-                    <p className="text-muted-foreground mb-8 max-w-md mx-auto">{error}</p>
-                    <Button onClick={fetchCampaigns} className="transition-all active:scale-[0.98]">
+                    <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                      Gagal memuat data kampanye. Silakan coba lagi.
+                    </p>
+                    <Button onClick={() => refetchCampaigns()} className="transition-all active:scale-[0.98]">
                       Coba Lagi
                     </Button>
                   </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +10,6 @@ import CampaignCard from "@/components/CampaignCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import pb from "@/lib/pocketbaseClient.js";
 import { getPageSections } from "@/services/cmsService.js";
 import {
   AlertCircle,
@@ -27,6 +26,7 @@ import {
 } from "lucide-react";
 
 const PILLAR_ICONS = [Handshake, GraduationCap, Microscope, School];
+const CAMPAIGNS_API_URL = "https://sdvapp.cloud/api/v1/socio/campaigns";
 const ICON_BY_NAME = {
   handshake: Handshake,
   graduation: GraduationCap,
@@ -79,6 +79,39 @@ function getPillarIcon(iconName, index) {
   }
 
   return PILLAR_ICONS[index % PILLAR_ICONS.length];
+}
+
+function normalizeCampaign(campaign) {
+  const collectedAmount = Number(campaign.collected_amount) || 0;
+  const targetAmount = Number(campaign.target_amount) || 0;
+  const percentage =
+    Number(campaign.collected_percentage) ||
+    (targetAmount > 0 ? Math.round((collectedAmount / targetAmount) * 100) : 0);
+
+  return {
+    ...campaign,
+    image: campaign.image_url,
+    dana_terkumpul: collectedAmount,
+    target_dana: targetAmount,
+    persentase: percentage,
+    deskripsi: campaign.short_description || campaign.description,
+  };
+}
+
+async function fetchCampaigns() {
+  const response = await fetch(CAMPAIGNS_API_URL);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.valid || !Array.isArray(result.data)) {
+    throw new Error(result.message || "Format data kampanye tidak valid");
+  }
+
+  return result.data.map(normalizeCampaign);
 }
 
 function SectionHeadingSkeleton({ muted = false }) {
@@ -316,9 +349,6 @@ const steps = [
 ];
 
 function HomePage() {
-  const [campaigns, setCampaigns] = useState([]);
-  const [isCampaignsLoading, setIsCampaignsLoading] = useState(true);
-  const [campaignError, setCampaignError] = useState(null);
   const { data: sections = [], isLoading: isSectionsLoading } = useQuery({
     queryKey: ["cms", "page-sections", "Home"],
     queryFn: async () => {
@@ -328,28 +358,15 @@ function HomePage() {
         : [];
     },
   });
-
-  const fetchCampaigns = async () => {
-    try {
-      setIsCampaignsLoading(true);
-      setCampaignError(null);
-      const result = await pb.collection("campaigns").getList(1, 10, {
-        $autoCancel: false,
-        sort: "-created",
-      });
-
-      setCampaigns(result.items);
-    } catch (error) {
-      console.error("Error fetching campaigns:", error);
-      setCampaignError("Gagal memuat data kampanye. Silakan coba lagi.");
-    } finally {
-      setIsCampaignsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // fetchCampaigns();
-  }, []);
+  const {
+    data: campaigns = [],
+    isLoading: isCampaignsLoading,
+    isError: isCampaignsError,
+    refetch: refetchCampaigns,
+  } = useQuery({
+    queryKey: ["campaigns"],
+    queryFn: fetchCampaigns,
+  });
 
   const sortedCampaigns = useMemo(() => {
     return [...campaigns].sort((a, b) => {
@@ -438,13 +455,15 @@ function HomePage() {
                 ),
               )}
             </div>
-          ) : campaignError ? (
+          ) : isCampaignsError ? (
             <div className="text-center py-16 flex flex-col items-center max-w-md mx-auto bg-muted rounded-2xl border border-border">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-lg text-foreground font-medium mb-2">Oops!</p>
-              <p className="text-muted-foreground mb-6">{campaignError}</p>
+              <p className="text-muted-foreground mb-6">
+                Gagal memuat data kampanye. Silakan coba lagi.
+              </p>
               <Button
-                onClick={fetchCampaigns}
+                onClick={() => refetchCampaigns()}
                 variant="outline"
                 className="transition-all active:scale-[0.98]"
               >

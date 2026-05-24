@@ -58,7 +58,7 @@ function CampaignCard({ campaign, index = 0 }) {
       className="h-full"
     >
       <Card className="overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-muted/60">
-        <Link href={`/campaign/${campaign.id}`} className="relative block aspect-[16/10] overflow-hidden group bg-muted">
+        <Link href={`/campaign/${campaign.slug}`} className="relative block aspect-[16/10] overflow-hidden group bg-muted">
           <img
             src={imageUrl}
             alt={campaign.nama || campaign.title || 'Campaign Image'}
@@ -85,7 +85,7 @@ function CampaignCard({ campaign, index = 0 }) {
         
         <CardContent className="p-6 flex-1 flex flex-col">
           <div className="mb-5">
-            <Link href={`/campaign/${campaign.id}`}>
+            <Link href={`/campaign/${campaign.slug}`}>
               <h3 className="text-xl font-bold mb-3 hover:text-primary transition-colors line-clamp-2 leading-tight">
                 {campaign.nama || campaign.title || 'Tanpa Nama'}
               </h3>
@@ -124,7 +124,7 @@ function CampaignCard({ campaign, index = 0 }) {
         </CardContent>
         
         <CardFooter className="p-6 pt-0 flex-col gap-4">
-          <Link href={`/campaign/${campaign.id}`} className="w-full">
+          <Link href={`/campaign/${campaign.slug}`} className="w-full">
             <Button 
               className={`w-full font-semibold transition-all ${
                 isFullyFunded 
