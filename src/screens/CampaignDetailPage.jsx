@@ -92,6 +92,7 @@ async function fetchCampaignData(slug) {
 
 function CampaignDetailPage({ id }) {
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [selectedDonationAmount, setSelectedDonationAmount] = useState(null);
   const {
     data,
     isLoading,
@@ -173,17 +174,26 @@ function CampaignDetailPage({ id }) {
 
   // Mock data for fields not in the database schema to keep the UI rich
   const mockDonationTiers = [
-    { amount: 50000, description: "Dukungan dasar untuk membantu operasional program." },
-    { amount: 150000, description: "Membantu menyediakan modul pembelajaran untuk 1 siswa." },
-    { amount: 500000, description: "Beasiswa penuh untuk 1 siswa selama 1 bulan." },
-    { amount: 1000000, description: "Menjadi sponsor utama untuk fasilitas kelas." }
+    { amount: 50000},
+    { amount: 150000},
+    { amount: 500000 },
+    { amount: 1000000 }
   ];
 
   const mockTimeline = [
     { event: "Kampanye Dimulai", date: campaign.created },
-    { event: "Pencapaian 50% Target", date: new Date(new Date(campaign.created).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() },
     { event: "Target Selesai", date: new Date(new Date(campaign.created).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() }
   ];
+
+  const openDonationModal = (amount = null) => {
+    setSelectedDonationAmount(amount);
+    setIsDonationModalOpen(true);
+  };
+
+  const closeDonationModal = () => {
+    setIsDonationModalOpen(false);
+    setSelectedDonationAmount(null);
+  };
 
   return (
     <>
@@ -240,7 +250,7 @@ function CampaignDetailPage({ id }) {
                             <p className="text-xl font-bold text-foreground">{formatCurrency(targetDana)}</p>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-1">Donatur</p>
+                            <p className="text-sm font-medium text-muted-foreground mb-1">Subscriber</p>
                             <p className="text-xl font-bold text-foreground flex items-center">
                               <Users className="w-5 h-5 mr-1.5 text-muted-foreground" />
                               {campaign.donor_count || 0}
@@ -257,10 +267,10 @@ function CampaignDetailPage({ id }) {
                       <Button
                         size="lg"
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-lg font-semibold mb-4 py-6 transition-transform active:scale-[0.98]"
-                        onClick={() => setIsDonationModalOpen(true)}
+                        onClick={() => openDonationModal()}
                         disabled={campaign.status === 'Selesai'}
                       >
-                        {campaign.status === 'Selesai' ? 'Kampanye Selesai' : 'Donasi sekarang'}
+                        {campaign.status === 'Selesai' ? 'Kampanye Selesai' : 'Program Submission'}
                       </Button>
 
                       <div className="mb-8">
@@ -275,7 +285,11 @@ function CampaignDetailPage({ id }) {
                       
                       {/* Swipeable Campaign Gallery added right before description */}
                       <div className="mb-8">
-                        <CampaignGallery imageUrl={headerImageUrl} altText={campaign.nama || 'Kampanye image'} />
+                        <CampaignGallery
+                          imageUrl={headerImageUrl}
+                          sliderContent={campaign.slider_content}
+                          altText={campaign.nama || 'Kampanye image'}
+                        />
                       </div>
 
                       <div>
@@ -300,13 +314,12 @@ function CampaignDetailPage({ id }) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {mockDonationTiers.map((tier, index) => (
                             <Card key={index} className="hover:shadow-md transition-all duration-300 hover:-translate-y-1 border-border/50 cursor-pointer" onClick={() => {
-                              if(campaign.status !== 'Selesai') setIsDonationModalOpen(true);
+                              if(campaign.status !== 'Selesai') openDonationModal(tier.amount);
                             }}>
                               <CardContent className="p-6">
                                 <p className="text-2xl font-bold text-primary mb-2">
                                   {formatCurrency(tier.amount)}
                                 </p>
-                                <p className="text-sm text-muted-foreground leading-relaxed">{tier.description}</p>
                               </CardContent>
                             </Card>
                           ))}
@@ -380,8 +393,9 @@ function CampaignDetailPage({ id }) {
 
       <DonationModal
         isOpen={isDonationModalOpen}
-        onClose={() => setIsDonationModalOpen(false)}
+        onClose={closeDonationModal}
         campaign={campaign}
+        initialAmount={selectedDonationAmount}
       />
     </>
   );

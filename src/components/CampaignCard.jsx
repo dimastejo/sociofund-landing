@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,26 @@ import { motion } from 'framer-motion';
 import pb from '@/lib/pocketbaseClient.js';
 import ShareButtons from '@/components/ShareButtons.jsx';
 
+const FALLBACK_IMAGE_URL = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
+
+function appendQueryParam(url, key, value) {
+  if (!url || !value || !url.startsWith('http')) return url;
+
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}${key}=${encodeURIComponent(value)}`;
+}
+
+function getLowResImageUrl(imageUrl) {
+  if (!imageUrl) return '';
+  if (imageUrl.startsWith('data:')) return imageUrl;
+
+  return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=32&q=20`;
+}
+
 function CampaignCard({ campaign, index = 0 }) {
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -27,9 +47,13 @@ function CampaignCard({ campaign, index = 0 }) {
   
   const isFullyFunded = persentase >= 100 || campaign.status === 'Selesai';
 
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [campaign.id, campaign.image]);
+
   // Safely resolve the dynamic image URL from PocketBase
   // Fallback to placeholder if no image exists
-  let imageUrl = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
+  let imageUrl = FALLBACK_IMAGE_URL;
   
   if (campaign.image) {
     if (typeof campaign.image === 'string' && (campaign.image.startsWith('http') || campaign.image.startsWith('data:'))) {
@@ -44,11 +68,14 @@ function CampaignCard({ campaign, index = 0 }) {
     imageUrl = campaign.images[0];
   }
 
-  // Add cache-busting parameter to ensure fresh images are loaded
-  if (imageUrl && imageUrl.startsWith('http')) {
-    const separator = imageUrl.includes('?') ? '&' : '?';
-    imageUrl = `${imageUrl}${separator}t=${Date.now()}`;
-  }
+  imageUrl = appendQueryParam(imageUrl, 't', campaign.updated_at || campaign.updatedAt || campaign.created_at || campaign.created);
+
+  const displayImageUrl = imageLoadFailed ? FALLBACK_IMAGE_URL : imageUrl;
+  const lowResImageUrl = getLowResImageUrl(displayImageUrl);
+
+  React.useEffect(() => {
+    setImageLoaded(false);
+  }, [displayImageUrl]);
 
   return (
     <motion.div
@@ -59,20 +86,29 @@ function CampaignCard({ campaign, index = 0 }) {
     >
       <Card className="overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-muted/60">
         <Link href={`/campaign/${campaign.slug}`} className="relative block aspect-[16/10] overflow-hidden group bg-muted">
-          <img
-            src={imageUrl}
+          <div
+            className={`absolute inset-0 scale-110 bg-cover bg-center blur-xl transition-opacity duration-500 ${
+              imageLoaded ? 'opacity-0' : 'opacity-100'
+            }`}
+            style={{ backgroundImage: lowResImageUrl ? `url("${lowResImageUrl}")` : undefined }}
+            aria-hidden="true"
+          />
+          <Image
+            src={displayImageUrl}
             alt={campaign.nama || campaign.title || 'Campaign Image'}
-            className="w-full h-full object-cover img-enhanced transition-transform duration-500 group-hover:scale-105"
-            onError={(e) => {
-              // Fallback if image fails to load
-              e.target.src = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
-            }}
+            fill
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+            className={`object-cover img-enhanced transition-all duration-500 group-hover:scale-105 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoadFailed(true)}
           />
           <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
             {isFullyFunded ? (
               <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm border-none flex items-center gap-1.5 px-2.5 py-1">
                 <CheckCircle className="w-3.5 h-3.5" />
-                Terdanai Penuh
+                Fully Support
               </Badge>
             ) : (
               <Badge variant="secondary" className="bg-white/90 text-slate-800 hover:bg-white font-medium shadow-sm border-none flex items-center gap-1.5 px-2.5 py-1 backdrop-blur-sm">
@@ -133,7 +169,7 @@ function CampaignCard({ campaign, index = 0 }) {
               }`}
               variant={isFullyFunded ? "outline" : "default"}
             >
-              {isFullyFunded ? "Lihat Detail" : "Donasi Sekarang"}
+              {isFullyFunded ? "Lihat Detail" : "Program Submission"}
             </Button>
           </Link>
           

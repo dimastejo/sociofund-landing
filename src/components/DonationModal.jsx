@@ -15,7 +15,9 @@ import { toast } from "sonner";
 import { Check } from "lucide-react";
 import { useEffect } from "react";
 
-function DonationModal({ isOpen, onClose, campaign }) {
+const presetAmounts = [50000, 150000, 500000, 1000000];
+
+function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
   const [donorInfo, setDonorInfo] = useState({
@@ -27,8 +29,6 @@ function DonationModal({ isOpen, onClose, campaign }) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-
-  const presetAmounts = [50000, 100000, 500000, 1000000];
 
   const handleAmountSelect = (amount) => {
     setSelectedAmount(amount);
@@ -168,6 +168,25 @@ function DonationModal({ isOpen, onClose, campaign }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (!initialAmount) {
+      setSelectedAmount(null);
+      setCustomAmount("");
+      return;
+    }
+
+    if (presetAmounts.includes(initialAmount)) {
+      setSelectedAmount(initialAmount);
+      setCustomAmount("");
+      return;
+    }
+
+    setSelectedAmount(null);
+    setCustomAmount(String(initialAmount));
+  }, [initialAmount, isOpen]);
+
   if (!campaign) return null;
 
   return (
@@ -303,7 +322,7 @@ function DonationModal({ isOpen, onClose, campaign }) {
               >
                 {isSubmitting
                   ? "Memproses..."
-                  : `Lanjutkan Donasi ${getFinalAmount() > 0 ? formatCurrency(getFinalAmount()) : ""}`}
+                  : `Lanjutkan ke Pembayaran ${getFinalAmount() > 0 ? formatCurrency(getFinalAmount()) : ""}`}
               </Button>
             </form>
           </>
