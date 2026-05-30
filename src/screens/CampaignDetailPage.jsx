@@ -283,6 +283,7 @@ function CampaignDetailPage({ id }) {
 
                       <Separator className="my-8" />
                       
+                      {/* Swipeable Campaign Gallery added right before description */}
                       <div className="mb-8">
                         <CampaignGallery
                           imageUrl={headerImageUrl}
