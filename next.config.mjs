@@ -10,11 +10,13 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'horizons-cdn.hostinger.com',
+        hostname: '**',
+        pathname: '/**',
       },
       {
-        protocol: 'https',
-        hostname: 'sdvapp.cloud',
+        protocol: 'http',
+        hostname: '**',
+        pathname: '/**',
       },
     ],
   },

@@ -12,8 +12,6 @@ import { motion } from 'framer-motion';
 import pb from '@/lib/pocketbaseClient.js';
 import ShareButtons from '@/components/ShareButtons.jsx';
 
-const FALLBACK_IMAGE_URL = "https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg";
-
 function appendQueryParam(url, key, value) {
   if (!url || !value || !url.startsWith('http')) return url;
 
@@ -53,24 +51,11 @@ function CampaignCard({ campaign, index = 0 }) {
 
   // Safely resolve the dynamic image URL from PocketBase
   // Fallback to placeholder if no image exists
-  let imageUrl = FALLBACK_IMAGE_URL;
+  let imageUrl = campaign.image;
   
-  if (campaign.image) {
-    if (typeof campaign.image === 'string' && (campaign.image.startsWith('http') || campaign.image.startsWith('data:'))) {
-      // If it's already a full URL, use it directly
-      imageUrl = campaign.image;
-    } else if (campaign.collectionId && campaign.id) {
-      // If it's a filename from PocketBase, resolve it
-      imageUrl = pb.files.getUrl(campaign, campaign.image);
-    }
-  } else if (campaign.images && campaign.images.length > 0) {
-    // Fallback for local mock data if still used anywhere
-    imageUrl = campaign.images[0];
-  }
-
   imageUrl = appendQueryParam(imageUrl, 't', campaign.updated_at || campaign.updatedAt || campaign.created_at || campaign.created);
 
-  const displayImageUrl = imageLoadFailed ? FALLBACK_IMAGE_URL : imageUrl;
+  const displayImageUrl = imageUrl;
   const lowResImageUrl = getLowResImageUrl(displayImageUrl);
 
   React.useEffect(() => {
