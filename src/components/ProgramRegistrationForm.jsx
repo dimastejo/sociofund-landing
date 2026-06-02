@@ -1,33 +1,43 @@
-import React, { useState, useRef } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Upload, X, Loader2, CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner';
-import pb from '@/lib/pocketbaseClient';
-import { Button } from '@/components/ui/button';
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Loader2, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import ImageUploader from "@/components/ImageUploader.jsx";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"];
+const CAMPAIGN_API_URL = "https://sdvapp.cloud/api/v1/socio/campaign";
 
 const formSchema = z.object({
-  pic_name: z.string().min(2, "Nama PIC minimal 2 karakter"),
-  pic_phone: z.string().regex(/^(^\+62|62|^08)(\d{3,4}-?){2}\d{3,4}$/, "Format nomor telepon Indonesia tidak valid (contoh: 08123456789)"),
-  program_name: z.string().min(3, "Nama Program minimal 3 karakter"),
-  school_community_name: z.string().min(3, "Asal Sekolah/Komunitas minimal 3 karakter"),
-  school_community_address: z.string().min(10, "Alamat minimal 10 karakter"),
-  funding_amount: z.string().min(1, "Nilai yang dibutuhkan wajib diisi").transform((val) => Number(val.replace(/\D/g, ''))).refine((val) => val > 0, "Nilai harus lebih dari 0"),
-  funding_purpose: z.string().min(10, "Peruntukan dana minimal 10 karakter"),
-  data_confirmation: z.boolean().refine((val) => val === true, "Anda harus mengonfirmasi kebenaran data"),
+  user_name: z.string().min(2, "Nama minimal 2 karakter"),
+  user_email: z.string().email("Format email tidak valid"),
+  user_phone: z
+    .string()
+    .regex(
+      /^(^\+62|62|^08)(\d{3,4}-?){2}\d{3,4}$/,
+      "Format nomor telepon Indonesia tidak valid (contoh: 08123456789)",
+    ),
+  title: z.string().min(3, "Nama Program minimal 3 karakter"),
+  asal_sekolah: z.string().min(3, "Asal Sekolah minimal 3 karakter"),
+  alamat_sekolah: z.string().min(10, "Alamat sekolah minimal 10 karakter"),
+  target_amount: z
+    .string()
+    .min(1, "Nilai yang dibutuhkan wajib diisi")
+    .transform((val) => Number(val.replace(/\D/g, "")))
+    .refine((val) => val > 0, "Nilai harus lebih dari 0"),
+  short_description: z.string().min(10, "Peruntukan dana minimal 10 karakter"),
+  data_confirmation: z
+    .boolean()
+    .refine((val) => val === true, "Anda harus mengonfirmasi kebenaran data"),
 });
 
 function ProgramRegistrationForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [photoError, setPhotoError] = useState("");
-  const fileInputRef = useRef(null);
+  const [imageUrl, setImageUrl] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   const {
     register,
@@ -35,98 +45,79 @@ function ProgramRegistrationForm() {
     formState: { errors, isValid },
     reset,
     setValue,
-    watch
   } = useForm({
     resolver: zodResolver(formSchema),
     mode: "onChange",
     defaultValues: {
-      data_confirmation: false
-    }
+      data_confirmation: false,
+    },
   });
-
-  const fundingAmountValue = watch("funding_amount");
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setPhotoError("");
-
-    if (!file) return;
-
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setPhotoError("Format file harus JPG, JPEG, atau PNG");
-      return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      setPhotoError("Ukuran file maksimal 20MB");
-      return;
-    }
-
-    setPhotoFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removePhoto = () => {
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
 
   const formatRupiah = (value) => {
     if (!value) return "";
-    const numberString = value.replace(/[^,\d]/g, '').toString();
-    const split = numberString.split(',');
+    const numberString = value.replace(/[^,\d]/g, "").toString();
+    const split = numberString.split(",");
     const sisa = split[0].length % 3;
     let rupiah = split[0].substr(0, sisa);
     const ribuan = split[0].substr(sisa).match(/\d{3}/gi);
 
     if (ribuan) {
-      const separator = sisa ? '.' : '';
-      rupiah += separator + ribuan.join('.');
+      const separator = sisa ? "." : "";
+      rupiah += separator + ribuan.join(".");
     }
 
-    rupiah = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah;
-    return rupiah ? `Rp ${rupiah}` : '';
+    rupiah = split[1] !== undefined ? rupiah + "," + split[1] : rupiah;
+    return rupiah ? `Rp ${rupiah}` : "";
   };
 
   const handleAmountChange = (e) => {
     const formatted = formatRupiah(e.target.value);
-    setValue("funding_amount", formatted, { shouldValidate: true });
+    setValue("target_amount", formatted, { shouldValidate: true });
   };
 
   const onSubmit = async (data) => {
-    if (!photoFile) {
-      setPhotoError("Foto wajib diunggah");
+    if (!imageUrl) {
+      setImageError("Foto wajib diunggah");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('pic_name', data.pic_name);
-      formData.append('pic_phone', data.pic_phone);
-      formData.append('program_name', data.program_name);
-      formData.append('school_community_name', data.school_community_name);
-      formData.append('school_community_address', data.school_community_address);
-      formData.append('funding_amount', data.funding_amount);
-      formData.append('funding_purpose', data.funding_purpose);
-      formData.append('data_confirmation', data.data_confirmation);
-      formData.append('status', 'pending');
-      formData.append('photo', photoFile);
+      const payload = {
+        user_name: data.user_name,
+        user_email: data.user_email,
+        user_phone: data.user_phone,
+        title: data.title,
+        asal_sekolah: data.asal_sekolah,
+        alamat_sekolah: data.alamat_sekolah,
+        target_amount: data.target_amount,
+        short_description: data.short_description,
+        data_confirmation: data.data_confirmation,
+        status: "pending",
+        image_url: imageUrl,
+      };
 
-      await pb.collection('program_registrations').create(formData, { $autoCancel: false });
-      
+      const response = await fetch(CAMPAIGN_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || result?.valid === false) {
+        throw new Error(
+          result?.message || `Request failed with status ${response.status}`,
+        );
+      }
+
       setIsSuccess(true);
       toast.success("Pendaftaran program berhasil dikirim!");
       reset();
-      removePhoto();
-      
+      setImageUrl("");
+      setImageError("");
+
       // Reset success state after 5 seconds
       setTimeout(() => setIsSuccess(false), 5000);
     } catch (error) {
@@ -145,9 +136,13 @@ function ProgramRegistrationForm() {
         </div>
         <h3 className="text-2xl font-bold mb-4">Pendaftaran Berhasil!</h3>
         <p className="text-muted-foreground mb-8">
-          Terima kasih telah mendaftarkan program Anda. Tim kami akan meninjau pendaftaran Anda dan segera menghubungi PIC yang terdaftar.
+          Terima kasih telah mendaftarkan program Anda. Tim kami akan meninjau
+          pendaftaran Anda dan segera menghubungi PIC yang terdaftar.
         </p>
-        <Button onClick={() => setIsSuccess(false)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button
+          onClick={() => setIsSuccess(false)}
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+        >
           Daftarkan Program Lain
         </Button>
       </div>
@@ -156,140 +151,204 @@ function ProgramRegistrationForm() {
 
   return (
     <div className="bg-card rounded-2xl shadow-lg p-6 md:p-8 border border-border">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" autoComplete="off">
+        {/* PIC Name */}
+        <div className="space-y-2">
+          <label
+            htmlFor="user_name"
+            className="text-sm font-medium text-foreground"
+          >
+            Nama <span className="text-destructive">*</span>
+          </label>
+          <input
+            id="user_name"
+            type="text"
+            className={`flex h-10 w-full rounded-md border ${errors.user_name ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            placeholder="Masukkan nama lengkap"
+            {...register("user_name")}
+          />
+          {errors.user_name && (
+            <p className="text-sm text-destructive">
+              {errors.user_name.message}
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* PIC Name */}
+          {/* Email */}
           <div className="space-y-2">
-            <label htmlFor="pic_name" className="text-sm font-medium text-foreground">Nama PIC <span className="text-destructive">*</span></label>
+            <label
+              htmlFor="user_email"
+              className="text-sm font-medium text-foreground"
+            >
+              Email <span className="text-destructive">*</span>
+            </label>
             <input
-              id="pic_name"
-              type="text"
-              className={`flex h-10 w-full rounded-md border ${errors.pic_name ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
-              placeholder="Masukkan nama lengkap PIC"
-              {...register("pic_name")}
+              id="user_email"
+              type="email"
+              className={`flex h-10 w-full rounded-md border ${errors.user_email ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+              placeholder="nama@email.com"
+              {...register("user_email")}
             />
-            {errors.pic_name && <p className="text-sm text-destructive">{errors.pic_name.message}</p>}
+            {errors.user_email && (
+              <p className="text-sm text-destructive">
+                {errors.user_email.message}
+              </p>
+            )}
           </div>
 
           {/* PIC Phone */}
           <div className="space-y-2">
-            <label htmlFor="pic_phone" className="text-sm font-medium text-foreground">No Telp PIC <span className="text-destructive">*</span></label>
+            <label
+              htmlFor="user_phone"
+              className="text-sm font-medium text-foreground"
+            >
+              No Telp PIC <span className="text-destructive">*</span>
+            </label>
             <input
-              id="pic_phone"
+              id="user_phone"
               type="tel"
-              className={`flex h-10 w-full rounded-md border ${errors.pic_phone ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`flex h-10 w-full rounded-md border ${errors.user_phone ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
               placeholder="Contoh: 08123456789"
-              {...register("pic_phone")}
+              {...register("user_phone")}
             />
-            {errors.pic_phone && <p className="text-sm text-destructive">{errors.pic_phone.message}</p>}
+            {errors.user_phone && (
+              <p className="text-sm text-destructive">
+                {errors.user_phone.message}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Program Name */}
         <div className="space-y-2">
-          <label htmlFor="program_name" className="text-sm font-medium text-foreground">Nama Program <span className="text-destructive">*</span></label>
+          <label
+            htmlFor="title"
+            className="text-sm font-medium text-foreground"
+          >
+            Nama Program <span className="text-destructive">*</span>
+          </label>
           <input
-            id="program_name"
+            id="title"
             type="text"
-            className={`flex h-10 w-full rounded-md border ${errors.program_name ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`flex h-10 w-full rounded-md border ${errors.title ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
             placeholder="Masukkan nama program pendidikan"
-            {...register("program_name")}
+            {...register("title")}
           />
-          {errors.program_name && <p className="text-sm text-destructive">{errors.program_name.message}</p>}
+          {errors.title && (
+            <p className="text-sm text-destructive">{errors.title.message}</p>
+          )}
         </div>
 
         {/* School/Community Name */}
         <div className="space-y-2">
-          <label htmlFor="school_community_name" className="text-sm font-medium text-foreground">Asal Sekolah/Komunitas <span className="text-destructive">*</span></label>
+          <label
+            htmlFor="asal_sekolah"
+            className="text-sm font-medium text-foreground"
+          >
+            Asal Sekolah <span className="text-destructive">*</span>
+          </label>
           <input
-            id="school_community_name"
+            id="asal_sekolah"
             type="text"
-            className={`flex h-10 w-full rounded-md border ${errors.school_community_name ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
-            placeholder="Nama sekolah atau komunitas"
-            {...register("school_community_name")}
+            className={`flex h-10 w-full rounded-md border ${errors.asal_sekolah ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            placeholder="Nama sekolah"
+            {...register("asal_sekolah")}
           />
-          {errors.school_community_name && <p className="text-sm text-destructive">{errors.school_community_name.message}</p>}
+          {errors.asal_sekolah && (
+            <p className="text-sm text-destructive">
+              {errors.asal_sekolah.message}
+            </p>
+          )}
         </div>
 
         {/* School/Community Address */}
         <div className="space-y-2">
-          <label htmlFor="school_community_address" className="text-sm font-medium text-foreground">Alamat Sekolah/Komunitas <span className="text-destructive">*</span></label>
+          <label
+            htmlFor="alamat_sekolah"
+            className="text-sm font-medium text-foreground"
+          >
+            Alamat Sekolah <span className="text-destructive">*</span>
+          </label>
           <textarea
-            id="school_community_address"
+            id="alamat_sekolah"
             rows={3}
-            className={`flex w-full rounded-md border ${errors.school_community_address ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`flex w-full rounded-md border ${errors.alamat_sekolah ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
             placeholder="Alamat lengkap"
-            {...register("school_community_address")}
+            {...register("alamat_sekolah")}
           />
-          {errors.school_community_address && <p className="text-sm text-destructive">{errors.school_community_address.message}</p>}
+          {errors.alamat_sekolah && (
+            <p className="text-sm text-destructive">
+              {errors.alamat_sekolah.message}
+            </p>
+          )}
         </div>
 
         {/* Funding Amount */}
         <div className="space-y-2">
-          <label htmlFor="funding_amount" className="text-sm font-medium text-foreground">Nilai yang Dibutuhkan <span className="text-destructive">*</span></label>
+          <label
+            htmlFor="target_amount"
+            className="text-sm font-medium text-foreground"
+          >
+            Nilai yang Dibutuhkan <span className="text-destructive">*</span>
+          </label>
           <input
-            id="funding_amount"
+            id="target_amount"
             type="text"
-            className={`flex h-10 w-full rounded-md border ${errors.funding_amount ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`flex h-10 w-full rounded-md border ${errors.target_amount ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
             placeholder="Rp 0"
-            {...register("funding_amount")}
+            {...register("target_amount")}
             onChange={handleAmountChange}
           />
-          {errors.funding_amount && <p className="text-sm text-destructive">{errors.funding_amount.message}</p>}
+          {errors.target_amount && (
+            <p className="text-sm text-destructive">
+              {errors.target_amount.message}
+            </p>
+          )}
         </div>
 
         {/* Funding Purpose */}
         <div className="space-y-2">
-          <label htmlFor="funding_purpose" className="text-sm font-medium text-foreground">Peruntukan Dana <span className="text-destructive">*</span></label>
+          <label
+            htmlFor="short_description"
+            className="text-sm font-medium text-foreground"
+          >
+            Peruntukan Dana <span className="text-destructive">*</span>
+          </label>
           <textarea
-            id="funding_purpose"
+            id="short_description"
             rows={4}
-            className={`flex w-full rounded-md border ${errors.funding_purpose ? 'border-destructive' : 'border-input'} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`flex w-full rounded-md border ${errors.short_description ? "border-destructive" : "border-input"} bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
             placeholder="Jelaskan secara detail untuk apa dana ini akan digunakan"
-            {...register("funding_purpose")}
+            {...register("short_description")}
           />
-          {errors.funding_purpose && <p className="text-sm text-destructive">{errors.funding_purpose.message}</p>}
+          {errors.short_description && (
+            <p className="text-sm text-destructive">
+              {errors.short_description.message}
+            </p>
+          )}
         </div>
 
         {/* Photo Upload */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Foto Pendukung <span className="text-destructive">*</span></label>
-          
-          {!photoPreview ? (
-            <div 
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors hover:bg-muted/50 ${photoError ? 'border-destructive' : 'border-border'}`}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-8 h-8 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm font-medium mb-1">Klik untuk mengunggah foto</p>
-              <p className="text-xs text-muted-foreground">JPG, JPEG, PNG (Maks. 20MB)</p>
-            </div>
-          ) : (
-            <div className="relative rounded-lg overflow-hidden border border-border inline-block">
-              <img src={photoPreview} alt="Preview" className="h-48 w-auto object-cover" />
-              <button
-                type="button"
-                onClick={removePhoto}
-                className="absolute top-2 right-2 bg-background/80 backdrop-blur p-1 rounded-full hover:bg-destructive hover:text-destructive-foreground transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-          
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".jpg,.jpeg,.png"
-            className="hidden"
+          <label className="text-sm font-medium text-foreground">
+            Foto Pendukung <span className="text-destructive">*</span>
+          </label>
+          <ImageUploader
+            value={imageUrl}
+            onFinish={(url) => {
+              setImageUrl(url);
+              setImageError("");
+            }}
+            onUploadingChange={setIsUploadingImage}
           />
-          {photoError && <p className="text-sm text-destructive">{photoError}</p>}
+          {imageError && (
+            <p className="text-sm text-destructive">{imageError}</p>
+          )}
         </div>
 
         {/* Data Confirmation */}
-        <div className="flex items-start space-x-3 pt-4 border-t border-border">
+        <div className="flex items-start space-x-3 pt-4 border-t border-border w-full">
           <div className="flex items-center h-5 mt-0.5">
             <input
               id="data_confirmation"
@@ -299,21 +358,29 @@ function ProgramRegistrationForm() {
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="data_confirmation" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            <label
+              htmlFor="data_confirmation"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
               Konfirmasi Data <span className="text-destructive">*</span>
             </label>
             <p className="text-sm text-muted-foreground">
-              Saya menyatakan bahwa seluruh data yang diisi adalah benar dan dapat dipertanggungjawabkan.
+              Saya menyatakan bahwa seluruh data yang diisi adalah benar dan
+              dapat dipertanggungjawabkan.
             </p>
-            {errors.data_confirmation && <p className="text-sm text-destructive">{errors.data_confirmation.message}</p>}
+            {errors.data_confirmation && (
+              <p className="text-sm text-destructive">
+                {errors.data_confirmation.message}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Submit Button */}
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           className="w-full h-12 text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
-          disabled={!isValid || !photoFile || isSubmitting}
+          disabled={!isValid || !imageUrl || isUploadingImage || isSubmitting}
         >
           {isSubmitting ? (
             <>

@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 const PILLAR_ICONS = [Handshake, GraduationCap, Microscope, School];
-const CAMPAIGNS_API_URL = "https://sdvapp.cloud/api/v1/socio/campaigns";
+const CAMPAIGNS_API_URL = "https://sdvapp.cloud/api/v1/socio/campaigns?status=active";
 const ICON_BY_NAME = {
   handshake: Handshake,
   graduation: GraduationCap,

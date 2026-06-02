@@ -35,6 +35,11 @@ function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/kontak" className="text-sm text-secondary-foreground/80 hover:text-primary transition-colors">
+                  Kontak
+                </Link>
+              </li>
+              <li>
                 <Link href="/register-program" className="text-sm text-secondary-foreground/80 hover:text-primary transition-colors">
                   Register Program
                 </Link>

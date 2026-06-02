@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Calendar, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Users, Calendar, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
 
 const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns';
 const CAMPAIGN_DETAIL_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaign';
@@ -148,6 +148,10 @@ function CampaignDetailPage({ id }) {
   const danaTerkumpul = campaign.dana_terkumpul || 0;
   const targetDana = campaign.target_dana || 1;
   const progressPercentage = campaign.persentase || ((danaTerkumpul / targetDana) * 100) || 0;
+  const isFullyFunded =
+    progressPercentage >= 100 ||
+    danaTerkumpul >= targetDana ||
+    campaign.status === 'Selesai';
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
@@ -186,6 +190,8 @@ function CampaignDetailPage({ id }) {
   ];
 
   const openDonationModal = (amount = null) => {
+    if (isFullyFunded) return;
+
     setSelectedDonationAmount(amount);
     setIsDonationModalOpen(true);
   };
@@ -230,9 +236,16 @@ function CampaignDetailPage({ id }) {
 
                       <div className="flex flex-wrap items-center gap-2 mb-4">
                         <Badge className="bg-primary text-primary-foreground">Pendidikan</Badge>
-                        <Badge variant={campaign.status === 'Selesai' ? 'secondary' : 'outline'} className={campaign.status === 'Selesai' ? 'bg-emerald-100 text-emerald-800' : ''}>
-                          {campaign.status || 'Sedang berjalan'}
-                        </Badge>
+                        {isFullyFunded ? (
+                          <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm border-none flex items-center gap-1.5 px-2.5 py-1">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Fully Support
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            {campaign.status || 'Sedang berjalan'}
+                          </Badge>
+                        )}
                       </div>
 
                       <h1 className="text-3xl md:text-4xl font-extrabold mb-4 text-foreground leading-tight" style={{ letterSpacing: '-0.02em' }}>
@@ -268,9 +281,9 @@ function CampaignDetailPage({ id }) {
                         size="lg"
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-lg font-semibold mb-4 py-6 transition-transform active:scale-[0.98]"
                         onClick={() => openDonationModal()}
-                        disabled={campaign.status === 'Selesai'}
+                        disabled={isFullyFunded}
                       >
-                        {campaign.status === 'Selesai' ? 'Kampanye Selesai' : 'Program Submission'}
+                        {isFullyFunded ? 'Kampanye Terpenuhi' : 'Program Submission'}
                       </Button>
 
                       <div className="mb-8">
@@ -307,24 +320,30 @@ function CampaignDetailPage({ id }) {
                         </div>
                       </div>
 
-                      <Separator className="my-8" />
+                      {!isFullyFunded && (
+                        <>
+                          <Separator className="my-8" />
 
-                      <div>
-                        <h2 className="text-2xl font-bold mb-6 text-foreground">Tingkat donasi</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {mockDonationTiers.map((tier, index) => (
-                            <Card key={index} className="hover:shadow-md transition-all duration-300 hover:-translate-y-1 border-border/50 cursor-pointer" onClick={() => {
-                              if(campaign.status !== 'Selesai') openDonationModal(tier.amount);
-                            }}>
-                              <CardContent className="p-6">
-                                <p className="text-2xl font-bold text-primary mb-2">
-                                  {formatCurrency(tier.amount)}
-                                </p>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
+                          <div>
+                            <h2 className="text-2xl font-bold mb-6 text-foreground">Tingkat donasi</h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {mockDonationTiers.map((tier, index) => (
+                                <Card
+                                  key={index}
+                                  className="hover:shadow-md transition-all duration-300 hover:-translate-y-1 border-border/50 cursor-pointer"
+                                  onClick={() => openDonationModal(tier.amount)}
+                                >
+                                  <CardContent className="p-6">
+                                    <p className="text-2xl font-bold text-primary mb-2">
+                                      {formatCurrency(tier.amount)}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>

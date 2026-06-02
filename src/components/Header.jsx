@@ -47,7 +47,7 @@ function Header() {
           <div className="hidden md:block">
             <Link href="/campaigns">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
-                Donate now
+                Program Submission
               </Button>
             </Link>
           </div>
@@ -81,7 +81,7 @@ function Header() {
                 </nav>
                 <Link href="/campaigns" onClick={() => setIsOpen(false)}>
                   <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
-                    Donate now
+                    Program Submission
                   </Button>
                 </Link>
                 <div className="border-t pt-6">

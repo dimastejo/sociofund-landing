@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,15 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
-import { useEffect } from "react";
 
 const presetAmounts = [50000, 150000, 500000, 1000000];
+const SUBSCRIBER_TYPES = {
+  direct: "direct",
+  external: "external",
+};
 
 function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
+  const [subscriberType, setSubscriberType] = useState(SUBSCRIBER_TYPES.direct);
   const [donorInfo, setDonorInfo] = useState({
     name: "",
     email: "",
@@ -61,7 +66,10 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
       return;
     }
 
-    if (!donorInfo.name || !donorInfo.email || !donorInfo.phone) {
+    if (
+      subscriberType === SUBSCRIBER_TYPES.direct &&
+      (!donorInfo.name || !donorInfo.email || !donorInfo.phone)
+    ) {
       toast.error("Mohon lengkapi semua informasi donatur");
       return;
     }
@@ -85,11 +93,11 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const handleMidtrans = async () => {
     const payload = {
       campaign_id: campaign.id,
+      donor_type: subscriberType,
       donor_name: donorInfo.name.trim(),
       donor_email: donorInfo.email.trim(),
       donor_phone: donorInfo.phone.trim(),
       amount: getFinalAmount(),
-      is_anonymous: 0,
     };
 
     const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
@@ -143,6 +151,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const resetForm = () => {
     setSelectedAmount(null);
     setCustomAmount("");
+    setSubscriberType(SUBSCRIBER_TYPES.direct);
     setDonorInfo({ name: "", email: "", phone: "" });
     setMessage("");
     setAgreedToTerms(false);
@@ -189,6 +198,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
 
   if (!campaign) return null;
 
+  const isDirectParticipant = subscriberType === SUBSCRIBER_TYPES.direct;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -203,10 +214,10 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+            <form onSubmit={handleSubmit} className="space-y-6 mt-4" autoComplete="off">
               <div>
                 <Label className="text-base font-semibold mb-3 block">
-                  Pilih jumlah donasi
+                  Pilih jumlah program submission
                 </Label>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   {presetAmounts.map((amount) => (
@@ -235,24 +246,41 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                     onChange={handleCustomAmountChange}
                     className="text-gray-900 placeholder:text-gray-500"
                   />
-                  {customAmount && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {formatCurrency(parseInt(customAmount) || 0)}
-                    </p>
-                  )}
                 </div>
               </div>
 
               <div className="space-y-4">
                 <Label className="text-base font-semibold">
-                  Informasi donatur
+                  Informasi subscriber
                 </Label>
+
+                <RadioGroup
+                  value={subscriberType}
+                  onValueChange={setSubscriberType}
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                >
+                  <Label
+                    htmlFor="subscriber-direct"
+                    className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition-colors hover:bg-muted/50"
+                  >
+                    <RadioGroupItem id="subscriber-direct" value={SUBSCRIBER_TYPES.direct} />
+                    <span className="font-medium">Partisipan Langsung</span>
+                  </Label>
+                  <Label
+                    htmlFor="subscriber-external"
+                    className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition-colors hover:bg-muted/50"
+                  >
+                    <RadioGroupItem id="subscriber-external" value={SUBSCRIBER_TYPES.external} />
+                    <span className="font-medium">Kontributor External</span>
+                  </Label>
+                </RadioGroup>
+
                 <div>
                   <Label htmlFor="name">Nama lengkap</Label>
                   <Input
                     id="name"
                     type="text"
-                    required
+                    required={isDirectParticipant}
                     value={donorInfo.name}
                     onChange={(e) =>
                       setDonorInfo({ ...donorInfo, name: e.target.value })
@@ -265,7 +293,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   <Input
                     id="email"
                     type="email"
-                    required
+                    required={isDirectParticipant}
                     value={donorInfo.email}
                     onChange={(e) =>
                       setDonorInfo({ ...donorInfo, email: e.target.value })
@@ -278,7 +306,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   <Input
                     id="phone"
                     type="tel"
-                    required
+                    required={isDirectParticipant}
                     value={donorInfo.phone}
                     onChange={(e) =>
                       setDonorInfo({ ...donorInfo, phone: e.target.value })

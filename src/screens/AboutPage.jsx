@@ -307,7 +307,7 @@ function AboutPage() {
                     Lihat Kampanye Kami
                   </Button>
                 </Link>
-                <Link href="/contact">
+                <Link href="/kontak">
                   <Button variant="outline" size="lg" className="border-secondary-foreground text-secondary-foreground hover:bg-secondary-foreground/10 bg-transparent h-14 px-8 text-lg font-semibold w-full sm:w-auto">
                     Hubungi Kami <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
