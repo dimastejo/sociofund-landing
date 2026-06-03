@@ -13,18 +13,57 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import ImageUploader from "@/components/ImageUploader.jsx";
 
 const presetAmounts = [50000, 150000, 500000, 1000000];
 const SUBSCRIBER_TYPES = {
   direct: "direct",
   external: "external",
 };
+const PAYMENT_METHODS = {
+  midtrans: "midtrans",
+  manual: "manual",
+};
+const MANUAL_PAYMENT_INFO = {
+  bank: "BCA",
+  accountNumber: "1234567890",
+  accountHolder: "Sociofund Indonesia",
+};
+const DONATION_DETAIL_API_URL = "https://sdvapp.cloud/api/v1/socio/donation";
+
+function encodeDonationCode(donationCode) {
+  if (typeof window === "undefined") return donationCode;
+
+  return window.btoa(donationCode);
+}
+
+function getDonationData(result) {
+  return result?.data?.data || result?.data || result;
+}
+
+function getDisplayDonationCode(donationCode, fallbackCode = "") {
+  const code = String(fallbackCode || donationCode || "");
+
+  if (code.includes("DNT-")) return code;
+  if (typeof window === "undefined") return code;
+
+  try {
+    const decodedCode = window.atob(String(donationCode));
+
+    if (decodedCode.includes("DNT-")) return decodedCode;
+  } catch {
+    // Keep the original value when it is not base64-encoded.
+  }
+
+  return code;
+}
 
 function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
   const [subscriberType, setSubscriberType] = useState(SUBSCRIBER_TYPES.direct);
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS.manual);
   const [donorInfo, setDonorInfo] = useState({
     name: "",
     email: "",
@@ -34,6 +73,10 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [manualPayment, setManualPayment] = useState(null);
+  const [paymentProofUrl, setPaymentProofUrl] = useState("");
+  const [existingPaymentProofUrl, setExistingPaymentProofUrl] = useState("");
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
 
   const handleAmountSelect = (amount) => {
     setSelectedAmount(amount);
@@ -82,7 +125,18 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setIsSubmitting(true);
 
     try {
-      await handleMidtrans();
+      if (paymentMethod === PAYMENT_METHODS.midtrans) {
+        await handleMidtrans();
+        return;
+      }
+
+      if (paymentMethod === PAYMENT_METHODS.manual) {
+        await handleManualPayment();
+        return;
+      }
+
+      toast.error("Metode pembayaran tidak valid");
+      setIsSubmitting(false);
     } catch (error) {
       console.error("Error processing donation:", error);
       toast.error("Gagal memproses donasi. Silakan coba lagi.");
@@ -90,15 +144,21 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     }
   };
 
-  const handleMidtrans = async () => {
-    const payload = {
+  const buildDonationPayload = (method) => {
+    return {
       campaign_id: campaign.id,
       donor_type: subscriberType,
       donor_name: donorInfo.name.trim(),
       donor_email: donorInfo.email.trim(),
       donor_phone: donorInfo.phone.trim(),
       amount: getFinalAmount(),
+      message: message.trim(),
+      payment_method: method,
     };
+  };
+
+  const handleMidtrans = async () => {
+    const payload = buildDonationPayload(PAYMENT_METHODS.midtrans);
 
     const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
       method: "POST",
@@ -109,11 +169,11 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     });
 
     const data = await r.json();
-    const token = data.token || data.data?.token;
+    const donationCode = data.donation_code || data.data?.donation_code;
     onClose();
 
-    if (!r.ok || !token) {
-      throw new Error(data.message || "Token pembayaran tidak tersedia");
+    if (!r.ok || !donationCode) {
+      throw new Error(data.message || "Kode pembayaran tidak tersedia");
     }
 
     if (typeof window === "undefined" || !window.snap?.pay) {
@@ -121,7 +181,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     }
 
     // @ts-ignore
-    window.snap.pay(token, {
+    window.snap.pay(donationCode, {
       onSuccess: () => {
         setIsSubmitting(false);
         setShowSuccess(true);
@@ -148,13 +208,126 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     });
   };
 
+  const handleManualPayment = async () => {
+    const payload = buildDonationPayload(PAYMENT_METHODS.manual);
+    payload.payment_url = window.location.href;
+
+    const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+    const donationCode = data.donation_code || data.data?.donation_code;
+
+    if (!r.ok || !donationCode) {
+      throw new Error(data.message || "Kode donasi tidak tersedia");
+    }
+
+    setManualPayment({
+      donationCode,
+      displayDonationCode: getDisplayDonationCode(donationCode),
+      amount: getFinalAmount(),
+      paymentStatus: "",
+    });
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("donation_code", encodeDonationCode(donationCode));
+    window.history.replaceState(null, "", nextUrl.toString());
+    setIsSubmitting(false);
+  };
+
+  const handleCopyAccountNumber = async () => {
+    try {
+      await navigator.clipboard.writeText(MANUAL_PAYMENT_INFO.accountNumber);
+      toast.success("Nomor rekening disalin");
+    } catch {
+      toast.error("Gagal menyalin nomor rekening");
+    }
+  };
+
+  const handleManualProofSubmit = async () => {
+    if (!paymentProofUrl) {
+      toast.error("Mohon unggah bukti pembayaran");
+      return;
+    }
+
+    if (existingPaymentProofUrl) {
+      toast.error("Bukti pembayaran sudah pernah dikirim");
+      return;
+    }
+
+    if (!manualPayment?.donationCode) {
+      toast.error("Kode donasi tidak tersedia");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const r = await fetch(
+        `https://sdvapp.cloud/api/v1/socio/donation/payment-proof`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            donation_code: manualPayment.donationCode,
+            payment_proof: paymentProofUrl,
+          }),
+        },
+      );
+      const data = await r.json().catch(() => null);
+
+      if (!r.ok || data?.valid === false) {
+        throw new Error(data?.message || "Gagal mengirim bukti pembayaran");
+      }
+
+      toast.success("Bukti pembayaran berhasil diunggah");
+      onClose();
+      resetForm();
+      removeDonationCodeQuery();
+    } catch (error) {
+      console.error("Error submitting payment proof:", error);
+      toast.error("Gagal mengirim bukti pembayaran. Silakan coba lagi.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const resetForm = () => {
     setSelectedAmount(null);
     setCustomAmount("");
     setSubscriberType(SUBSCRIBER_TYPES.direct);
+    setPaymentMethod(PAYMENT_METHODS.midtrans);
     setDonorInfo({ name: "", email: "", phone: "" });
     setMessage("");
     setAgreedToTerms(false);
+    setManualPayment(null);
+    setPaymentProofUrl("");
+    setExistingPaymentProofUrl("");
+    setIsUploadingProof(false);
+  };
+
+  const removeDonationCodeQuery = () => {
+    if (typeof window === "undefined") return;
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("donation_code");
+    nextUrl.searchParams.delete("donationcode");
+    window.history.replaceState(null, "", nextUrl.toString());
+  };
+
+  const handleDialogOpenChange = (open) => {
+    if (open) return;
+
+    onClose();
+    resetForm();
+    removeDonationCodeQuery();
   };
 
   useEffect(() => {
@@ -196,14 +369,219 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setCustomAmount(String(initialAmount));
   }, [initialAmount, isOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const encodedDonationCode = new URLSearchParams(window.location.search).get(
+      "donation_code",
+    );
+    if (!encodedDonationCode) return;
+
+    const donationCode = encodedDonationCode;
+
+    const fetchDonation = async () => {
+      try {
+        const response = await fetch(
+          `${DONATION_DETAIL_API_URL}/${encodeURIComponent(donationCode)}`,
+        );
+        const result = await response.json().catch(() => null);
+        const donation = getDonationData(result);
+
+        if (!response.ok || !donation) {
+          throw new Error(result?.message || "Donation tidak valid");
+        }
+
+        const proofUrl = donation.bukti_pembayaran_manual || "";
+        const displayDonationCode = getDisplayDonationCode(
+          donationCode,
+          donation.donation_code || donation.donationCode,
+        );
+
+        setManualPayment({
+          donationCode,
+          displayDonationCode,
+          amount: Number(donation.amount) || Number(donation.nominal) || 0,
+          paymentStatus: donation.payment_status || "",
+        });
+        setPaymentProofUrl(proofUrl);
+        setExistingPaymentProofUrl(proofUrl);
+        setPaymentMethod(PAYMENT_METHODS.manual);
+      } catch (error) {
+        console.error("Error fetching donation:", error);
+        toast.error("Kode donasi tidak valid");
+        removeDonationCodeQuery();
+      }
+    };
+
+    fetchDonation();
+  }, []);
+
   if (!campaign) return null;
 
   const isDirectParticipant = subscriberType === SUBSCRIBER_TYPES.direct;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen || Boolean(manualPayment)}
+      onOpenChange={handleDialogOpenChange}
+    >
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        {!showSuccess ? (
+        {manualPayment ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">
+                Pembayaran manual
+              </DialogTitle>
+              <DialogDescription>
+                Selesaikan transfer dan unggah bukti pembayaran untuk
+                verifikasi.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 mt-4">
+              <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Kode donasi</p>
+                    <p className="text-base font-semibold text-foreground">
+                      {manualPayment.displayDonationCode || manualPayment.donationCode}
+                    </p>
+                  </div>
+                  {manualPayment.amount > 0 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Nominal</p>
+                      <p className="text-base font-semibold text-foreground">
+                        {formatCurrency(manualPayment.amount)}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Bank</p>
+                    <p className="text-base font-semibold text-foreground">
+                      {MANUAL_PAYMENT_INFO.bank}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Pemilik rekening
+                    </p>
+                    <p className="text-base font-semibold text-foreground">
+                      {MANUAL_PAYMENT_INFO.accountHolder}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">No rekening</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xl font-bold text-foreground">
+                      {MANUAL_PAYMENT_INFO.accountNumber}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyAccountNumber}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Salin
+                    </Button>
+                  </div>
+                </div>
+
+                {manualPayment.paymentStatus && (
+                  <div
+                    className={`rounded-md border p-3 ${
+                      manualPayment.paymentStatus === "settlement"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-amber-200 bg-amber-50"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-semibold ${
+                        manualPayment.paymentStatus === "settlement"
+                          ? "text-emerald-800"
+                          : "text-amber-800"
+                      }`}
+                    >
+                      Status pembayaran
+                    </p>
+                    <p
+                      className={`mt-1 text-sm ${
+                        manualPayment.paymentStatus === "settlement"
+                          ? "text-emerald-700"
+                          : "text-amber-700"
+                      }`}
+                    >
+                      {manualPayment.paymentStatus === "settlement"
+                        ? "Pembayaran sudah terkonfirmasi."
+                        : "Pembayaran sedang diverifikasi."}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">
+                  Upload bukti pembayaran
+                </Label>
+                {existingPaymentProofUrl ? (
+                  <div className="rounded-md border border-border p-3">
+                    <p className="mb-3 text-sm font-medium text-muted-foreground">
+                      Bukti pembayaran sudah dikirim.
+                    </p>
+                    <img
+                      src={existingPaymentProofUrl}
+                      alt="Bukti pembayaran manual"
+                      className="max-h-64 w-auto max-w-full rounded-md object-contain"
+                    />
+                  </div>
+                ) : (
+                  <ImageUploader
+                    value={paymentProofUrl}
+                    onFinish={setPaymentProofUrl}
+                    onUploadingChange={setIsUploadingProof}
+                  />
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="button"
+                  className="w-full sm:flex-1"
+                  onClick={handleManualProofSubmit}
+                  disabled={
+                    manualPayment.paymentStatus === "settlement" ||
+                    Boolean(existingPaymentProofUrl) ||
+                    !paymentProofUrl ||
+                    isUploadingProof ||
+                    isSubmitting
+                  }
+                >
+                  {manualPayment.paymentStatus === "settlement"
+                    ? "Pembayaran terkonfirmasi"
+                    : existingPaymentProofUrl
+                      ? "Bukti sudah dikirim"
+                      : isUploadingProof || isSubmitting
+                        ? "Mengirim..."
+                      : "Kirim bukti pembayaran"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:flex-1"
+                  onClick={() => {
+                    onClose();
+                    resetForm();
+                    removeDonationCodeQuery();
+                  }}
+                >
+                  Tutup
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : !showSuccess ? (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">
@@ -214,7 +592,11 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-6 mt-4" autoComplete="off">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-6 mt-4"
+              autoComplete="off"
+            >
               <div>
                 <Label className="text-base font-semibold mb-3 block">
                   Pilih jumlah program submission
@@ -263,20 +645,33 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                     htmlFor="subscriber-direct"
                     className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition-colors hover:bg-muted/50"
                   >
-                    <RadioGroupItem id="subscriber-direct" value={SUBSCRIBER_TYPES.direct} />
+                    <RadioGroupItem
+                      id="subscriber-direct"
+                      value={SUBSCRIBER_TYPES.direct}
+                    />
                     <span className="font-medium">Partisipan Langsung</span>
                   </Label>
                   <Label
                     htmlFor="subscriber-external"
                     className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition-colors hover:bg-muted/50"
                   >
-                    <RadioGroupItem id="subscriber-external" value={SUBSCRIBER_TYPES.external} />
+                    <RadioGroupItem
+                      id="subscriber-external"
+                      value={SUBSCRIBER_TYPES.external}
+                    />
                     <span className="font-medium">Kontributor External</span>
                   </Label>
                 </RadioGroup>
 
                 <div>
-                  <Label htmlFor="name">Nama lengkap</Label>
+                  <Label htmlFor="name">
+                    Nama lengkap
+                    {isDirectParticipant && (
+                      <span className="ml-1 text-xs font-medium text-destructive">
+                        *harus diisi
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="name"
                     type="text"
@@ -289,7 +684,14 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">
+                    Email
+                    {isDirectParticipant && (
+                      <span className="ml-1 text-xs font-medium text-destructive">
+                        *harus diisi
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="email"
                     type="email"
@@ -302,7 +704,14 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="phone">Nomor telepon</Label>
+                  <Label htmlFor="phone">
+                    Nomor telepon
+                    {isDirectParticipant && (
+                      <span className="ml-1 text-xs font-medium text-destructive">
+                        *harus diisi
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="phone"
                     type="tel"
