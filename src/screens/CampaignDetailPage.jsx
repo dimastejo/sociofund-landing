@@ -288,7 +288,7 @@ function CampaignDetailPage({ id }) {
 
                       <div className="mb-8">
                         <ShareButtons 
-                          campaignId={campaign.id} 
+                          campaignSlug={campaign.slug} 
                           campaignName={campaign.nama || 'Kampanye'} 
                           targetDana={targetDana} 
                         />

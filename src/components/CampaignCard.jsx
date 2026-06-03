@@ -159,9 +159,9 @@ function CampaignCard({ campaign, index = 0 }) {
           </Link>
           
           <ShareButtons 
-            campaignId={campaign.id} 
+            campaignSlug={campaign.slug} 
             campaignName={campaign.nama || campaign.title || 'Kampanye'} 
-            targetDana={targetDana} 
+            targetDana={targetDana}
           />
         </CardFooter>
       </Card>

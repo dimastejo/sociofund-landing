@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Check, Copy } from "lucide-react";
 import ImageUploader from "@/components/ImageUploader.jsx";
+import apiClient from "@/lib/apiClient.js";
 
 const presetAmounts = [50000, 150000, 500000, 1000000];
 const SUBSCRIBER_TYPES = {
@@ -25,12 +27,6 @@ const PAYMENT_METHODS = {
   midtrans: "midtrans",
   manual: "manual",
 };
-const MANUAL_PAYMENT_INFO = {
-  bank: "BCA",
-  accountNumber: "1234567890",
-  accountHolder: "Sociofund Indonesia",
-};
-const DONATION_DETAIL_API_URL = "https://sdvapp.cloud/api/v1/socio/donation";
 
 function encodeDonationCode(donationCode) {
   if (typeof window === "undefined") return donationCode;
@@ -40,6 +36,63 @@ function encodeDonationCode(donationCode) {
 
 function getDonationData(result) {
   return result?.data?.data || result?.data || result;
+}
+
+async function createDonation(payload) {
+  const response = await apiClient.post("/v1/socio/donations", payload);
+  const data = response.data;
+  const donationCode = data.donation_code || data.data?.donation_code;
+
+  if (!donationCode) {
+    throw new Error(data.message || "Kode donasi tidak tersedia");
+  }
+
+  return { data, donationCode };
+}
+
+async function fetchDonationDetail(donationCode) {
+  const response = await apiClient.get(
+    `/v1/socio/donation/${encodeURIComponent(donationCode)}`,
+  );
+  const result = response.data;
+  const donation = getDonationData(result);
+
+  if (!donation) {
+    throw new Error(result?.message || "Donation tidak valid");
+  }
+
+  return donation;
+}
+
+async function submitPaymentProof(payload) {
+  const response = await apiClient.post("/v1/socio/donation/payment-proof", payload);
+  const data = response.data;
+
+  if (data?.valid === false) {
+    throw new Error(data?.message || "Gagal mengirim bukti pembayaran");
+  }
+
+  return data;
+}
+
+async function fetchSocioSettings() {
+  const response = await apiClient.get("/v1/socio/settings", {
+    params: {
+      setting_key: "bank,no_rekening,nama_pemilik_rekening",
+    },
+  });
+  const result = response.data;
+  const settings = result?.data;
+
+  if (!Array.isArray(settings)) {
+    throw new Error(result?.message || "Gagal memuat setting pembayaran");
+  }
+
+  return settings.reduce((acc, setting) => {
+    acc[setting.setting_key] =
+      setting.setting_value || setting.value || setting.settingValue || "";
+    return acc;
+  }, {});
 }
 
 function getDisplayDonationCode(donationCode, fallbackCode = "") {
@@ -57,6 +110,15 @@ function getDisplayDonationCode(donationCode, fallbackCode = "") {
   }
 
   return code;
+}
+
+function getEncryptedDonationCode(manualPayment) {
+  if (!manualPayment?.donationCode) return "";
+
+  return (
+    manualPayment.encryptedDonationCode ||
+    encodeDonationCode(manualPayment.donationCode)
+  );
 }
 
 function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
@@ -77,6 +139,34 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
   const [existingPaymentProofUrl, setExistingPaymentProofUrl] = useState("");
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [queryDonationCode, setQueryDonationCode] = useState("");
+  const createDonationMutation = useMutation({
+    mutationFn: createDonation,
+  });
+  const submitPaymentProofMutation = useMutation({
+    mutationFn: submitPaymentProof,
+  });
+  const {
+    data: queryDonation,
+    isError: isQueryDonationError,
+    error: queryDonationError,
+  } = useQuery({
+    queryKey: ["donation-detail", queryDonationCode],
+    queryFn: () => fetchDonationDetail(queryDonationCode),
+    enabled: Boolean(queryDonationCode),
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
+  const { data: socioSettings = {}, isLoading: isSocioSettingsLoading } = useQuery({
+    queryKey: ["socio-settings", "manual-payment"],
+    queryFn: fetchSocioSettings,
+    staleTime: 1000 * 60 * 10,
+  });
+  const manualPaymentInfo = {
+    bank: socioSettings.bank || "",
+    accountNumber: socioSettings.no_rekening || "",
+    accountHolder: socioSettings.nama_pemilik_rekening || "",
+  };
 
   const handleAmountSelect = (amount) => {
     setSelectedAmount(amount);
@@ -159,22 +249,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
 
   const handleMidtrans = async () => {
     const payload = buildDonationPayload(PAYMENT_METHODS.midtrans);
-
-    const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await r.json();
-    const donationCode = data.donation_code || data.data?.donation_code;
+    const { donationCode } = await createDonationMutation.mutateAsync(payload);
     onClose();
-
-    if (!r.ok || !donationCode) {
-      throw new Error(data.message || "Kode pembayaran tidak tersedia");
-    }
 
     if (typeof window === "undefined" || !window.snap?.pay) {
       throw new Error("Midtrans Snap belum tersedia");
@@ -211,24 +287,11 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   const handleManualPayment = async () => {
     const payload = buildDonationPayload(PAYMENT_METHODS.manual);
     payload.payment_url = window.location.href;
-
-    const r = await fetch(`https://sdvapp.cloud/api/v1/socio/donations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await r.json();
-    const donationCode = data.donation_code || data.data?.donation_code;
-
-    if (!r.ok || !donationCode) {
-      throw new Error(data.message || "Kode donasi tidak tersedia");
-    }
+    const { donationCode } = await createDonationMutation.mutateAsync(payload);
 
     setManualPayment({
       donationCode,
+      encryptedDonationCode: encodeDonationCode(donationCode),
       displayDonationCode: getDisplayDonationCode(donationCode),
       amount: getFinalAmount(),
       paymentStatus: "",
@@ -241,7 +304,12 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
 
   const handleCopyAccountNumber = async () => {
     try {
-      await navigator.clipboard.writeText(MANUAL_PAYMENT_INFO.accountNumber);
+      if (!manualPaymentInfo.accountNumber) {
+        toast.error("Nomor rekening belum tersedia");
+        return;
+      }
+
+      await navigator.clipboard.writeText(manualPaymentInfo.accountNumber);
       toast.success("Nomor rekening disalin");
     } catch {
       toast.error("Gagal menyalin nomor rekening");
@@ -267,25 +335,10 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setIsSubmitting(true);
 
     try {
-      const r = await fetch(
-        `https://sdvapp.cloud/api/v1/socio/donation/payment-proof`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            donation_code: manualPayment.donationCode,
-            payment_proof: paymentProofUrl,
-          }),
-        },
-      );
-      const data = await r.json().catch(() => null);
-
-      if (!r.ok || data?.valid === false) {
-        throw new Error(data?.message || "Gagal mengirim bukti pembayaran");
-      }
+      await submitPaymentProofMutation.mutateAsync({
+        donation_code: getEncryptedDonationCode(manualPayment),
+        payment_proof: paymentProofUrl,
+      });
 
       toast.success("Bukti pembayaran berhasil diunggah");
       onClose();
@@ -311,6 +364,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setPaymentProofUrl("");
     setExistingPaymentProofUrl("");
     setIsUploadingProof(false);
+    setQueryDonationCode("");
   };
 
   const removeDonationCodeQuery = () => {
@@ -374,47 +428,41 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
 
     const encodedDonationCode = new URLSearchParams(window.location.search).get(
       "donation_code",
-    );
+    ) || new URLSearchParams(window.location.search).get("donationcode");
     if (!encodedDonationCode) return;
 
-    const donationCode = encodedDonationCode;
-
-    const fetchDonation = async () => {
-      try {
-        const response = await fetch(
-          `${DONATION_DETAIL_API_URL}/${encodeURIComponent(donationCode)}`,
-        );
-        const result = await response.json().catch(() => null);
-        const donation = getDonationData(result);
-
-        if (!response.ok || !donation) {
-          throw new Error(result?.message || "Donation tidak valid");
-        }
-
-        const proofUrl = donation.bukti_pembayaran_manual || "";
-        const displayDonationCode = getDisplayDonationCode(
-          donationCode,
-          donation.donation_code || donation.donationCode,
-        );
-
-        setManualPayment({
-          donationCode,
-          displayDonationCode,
-          amount: Number(donation.amount) || Number(donation.nominal) || 0,
-          paymentStatus: donation.payment_status || "",
-        });
-        setPaymentProofUrl(proofUrl);
-        setExistingPaymentProofUrl(proofUrl);
-        setPaymentMethod(PAYMENT_METHODS.manual);
-      } catch (error) {
-        console.error("Error fetching donation:", error);
-        toast.error("Kode donasi tidak valid");
-        removeDonationCodeQuery();
-      }
-    };
-
-    fetchDonation();
+    setQueryDonationCode(encodedDonationCode);
   }, []);
+
+  useEffect(() => {
+    if (!queryDonation || !queryDonationCode) return;
+
+    const proofUrl = queryDonation.bukti_pembayaran_manual || "";
+    const displayDonationCode = getDisplayDonationCode(
+      queryDonationCode,
+      queryDonation.donation_code || queryDonation.donationCode,
+    );
+
+    setManualPayment({
+      donationCode: queryDonationCode,
+      encryptedDonationCode: queryDonationCode,
+      displayDonationCode,
+      amount: Number(queryDonation.amount) || Number(queryDonation.nominal) || 0,
+      paymentStatus: queryDonation.payment_status || "",
+    });
+    setPaymentProofUrl(proofUrl);
+    setExistingPaymentProofUrl(proofUrl);
+    setPaymentMethod(PAYMENT_METHODS.manual);
+  }, [queryDonation, queryDonationCode]);
+
+  useEffect(() => {
+    if (!isQueryDonationError) return;
+
+    console.error("Error fetching donation:", queryDonationError);
+    toast.error("Kode donasi tidak valid");
+    removeDonationCodeQuery();
+    setQueryDonationCode("");
+  }, [isQueryDonationError, queryDonationError]);
 
   if (!campaign) return null;
 
@@ -458,7 +506,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   <div>
                     <p className="text-sm text-muted-foreground">Bank</p>
                     <p className="text-base font-semibold text-foreground">
-                      {MANUAL_PAYMENT_INFO.bank}
+                      {manualPaymentInfo.bank ||
+                        (isSocioSettingsLoading ? "Memuat..." : "-")}
                     </p>
                   </div>
                   <div>
@@ -466,7 +515,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                       Pemilik rekening
                     </p>
                     <p className="text-base font-semibold text-foreground">
-                      {MANUAL_PAYMENT_INFO.accountHolder}
+                      {manualPaymentInfo.accountHolder ||
+                        (isSocioSettingsLoading ? "Memuat..." : "-")}
                     </p>
                   </div>
                 </div>
@@ -475,13 +525,15 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   <p className="text-sm text-muted-foreground">No rekening</p>
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xl font-bold text-foreground">
-                      {MANUAL_PAYMENT_INFO.accountNumber}
+                      {manualPaymentInfo.accountNumber ||
+                        (isSocioSettingsLoading ? "Memuat..." : "-")}
                     </p>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleCopyAccountNumber}
+                      disabled={!manualPaymentInfo.accountNumber}
                     >
                       <Copy className="w-4 h-4 mr-2" />
                       Salin
@@ -489,33 +541,13 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   </div>
                 </div>
 
-                {manualPayment.paymentStatus && (
-                  <div
-                    className={`rounded-md border p-3 ${
-                      manualPayment.paymentStatus === "settlement"
-                        ? "border-emerald-200 bg-emerald-50"
-                        : "border-amber-200 bg-amber-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-semibold ${
-                        manualPayment.paymentStatus === "settlement"
-                          ? "text-emerald-800"
-                          : "text-amber-800"
-                      }`}
-                    >
+                {manualPayment.paymentStatus === "settlement" && (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-sm font-semibold text-emerald-800">
                       Status pembayaran
                     </p>
-                    <p
-                      className={`mt-1 text-sm ${
-                        manualPayment.paymentStatus === "settlement"
-                          ? "text-emerald-700"
-                          : "text-amber-700"
-                      }`}
-                    >
-                      {manualPayment.paymentStatus === "settlement"
-                        ? "Pembayaran sudah terkonfirmasi."
-                        : "Pembayaran sedang diverifikasi."}
+                    <p className="mt-1 text-sm text-emerald-700">
+                      Pembayaran sudah terkonfirmasi.
                     </p>
                   </div>
                 )}

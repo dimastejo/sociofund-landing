@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Copy, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-function ShareButtons({ campaignId, campaignName, targetDana }) {
+function ShareButtons({ campaignSlug, campaignName, targetDana }) {
   const baseUrl = 'https://sociofund.or.id/campaign';
-  const shareUrl = `${baseUrl}/${campaignId}`;
+  const shareUrl = `${baseUrl}/${campaignSlug}`;
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
