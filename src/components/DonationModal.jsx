@@ -173,14 +173,37 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setCustomAmount("");
   };
 
+  const formatRupiahInput = (value) => {
+    if (!value) return "";
+
+    const numberString = String(value).replace(/[^,\d]/g, "");
+    const split = numberString.split(",");
+    const sisa = split[0].length % 3;
+    let rupiah = split[0].substr(0, sisa);
+    const ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+
+    if (ribuan) {
+      const separator = sisa ? "." : "";
+      rupiah += separator + ribuan.join(".");
+    }
+
+    rupiah = split[1] !== undefined ? rupiah + "," + split[1] : rupiah;
+    return rupiah ? `Rp ${rupiah}` : "";
+  };
+
+  const getNumericAmount = (value) => {
+    return Number(String(value || "").replace(/\D/g, ""));
+  };
+
   const handleCustomAmountChange = (e) => {
-    const value = e.target.value.replace(/\D/g, "");
-    setCustomAmount(value);
+    const formatted = formatRupiahInput(e.target.value);
+
+    setCustomAmount(formatted);
     setSelectedAmount(null);
   };
 
   const getFinalAmount = () => {
-    return selectedAmount || parseInt(customAmount) || 0;
+    return selectedAmount || getNumericAmount(customAmount) || 0;
   };
 
   const formatCurrency = (amount) => {
@@ -420,7 +443,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     }
 
     setSelectedAmount(null);
-    setCustomAmount(String(initialAmount));
+    setCustomAmount(formatRupiahInput(initialAmount));
   }, [initialAmount, isOpen]);
 
   useEffect(() => {
@@ -473,7 +496,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
       open={isOpen || Boolean(manualPayment)}
       onOpenChange={handleDialogOpenChange}
     >
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[70vh] md:max-h-[90vh] overflow-y-auto">
         {manualPayment ? (
           <>
             <DialogHeader>
@@ -655,7 +678,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   <Input
                     id="customAmount"
                     type="text"
-                    placeholder="Masukkan jumlah (min. Rp 10.000)"
+                    inputMode="numeric"
+                    placeholder="Rp 0"
                     value={customAmount}
                     onChange={handleCustomAmountChange}
                     className="text-gray-900 placeholder:text-gray-500"
