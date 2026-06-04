@@ -8,6 +8,11 @@ export const metadata = {
   },
   description:
     'Platform crowdfunding untuk mendukung pendidikan berkualitas di Indonesia. Bantu mahasiswa mencapai impian mereka melalui program pelatihan bahasa dan pendidikan.',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({ children }) {
