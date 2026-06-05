@@ -428,7 +428,7 @@ function HomePage() {
 
   const renderCampaignSection = (section) => {
     const content = section.content || {};
-    const campaignLimit = Math.max(Number(content.jumlahGrid) || 2, 1);
+    const campaignLimit = 6; //Math.max(Number(content.jumlahGrid) || 2, 1);
     const displayedCampaigns = sortedCampaigns.slice(0, campaignLimit);
     const gridClass =
       campaignLimit >= 3
