@@ -6,7 +6,7 @@ function Footer() {
   return (
     <footer className="bg-secondary text-secondary-foreground">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center mb-4">
               <span className="text-xl font-bold text-primary">Sociofund</span>
@@ -63,26 +63,6 @@ function Footer() {
                 <span>Yogyakarta, Indonesia</span>
               </li>
             </ul>
-          </div>
-
-          <div>
-            <span className="font-semibold text-base mb-4 block">Follow us</span>
-            <div className="flex space-x-4">
-              <a href="#" className="text-secondary-foreground/80 hover:text-primary transition-colors">
-                <Facebook className="w-5 h-5" />
-              </a>
-              <a 
-                href="https://www.instagram.com/sociofund.labs/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-secondary-foreground/80 hover:text-primary transition-colors"
-              >
-                <Instagram className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-secondary-foreground/80 hover:text-primary transition-colors">
-                <Twitter className="w-5 h-5" />
-              </a>
-            </div>
           </div>
         </div>
 

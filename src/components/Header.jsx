@@ -63,7 +63,7 @@ function Header() {
               <div className="flex flex-col space-y-6 mt-8">
                 <Link href="/" className="flex items-center space-x-2 mb-4">
                   <div className="flex items-center">
-                    <span className="text-xl font-bold text-primary">sociofund</span>
+                    <Image src="/logo.png" alt="Sociofund Logo" width={132} height={32}/>
                   </div>
                 </Link>
                 <nav className="flex flex-col space-y-4">
@@ -72,7 +72,7 @@ function Header() {
                       key={link.path}
                       href={link.path}
                       onClick={() => setIsOpen(false)}
-                      className={`text-lg font-medium transition-colors hover:text-primary ${
+                      className={`text-md font-medium transition-colors hover:text-primary ${
                         isActive(link.path) ? 'text-primary font-semibold' : 'text-foreground'
                       }`}
                     >
@@ -85,19 +85,6 @@ function Header() {
                     Program Submission
                   </Button>
                 </Link>
-                <div className="border-t pt-6">
-                  <p className="text-sm font-medium mb-4">Follow us</p>
-                  <div className="flex space-x-4">
-                    <a 
-                      href="https://www.instagram.com/sociofund.labs/" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-foreground hover:text-primary transition-colors"
-                    >
-                      <Instagram className="w-5 h-5" />
-                    </a>
-                  </div>
-                </div>
               </div>
             </SheetContent>
           </Sheet>
