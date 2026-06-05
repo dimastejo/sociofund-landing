@@ -18,7 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, Calendar, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
 
-const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns';
+const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns?status=active';
 const CAMPAIGN_DETAIL_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaign';
 const FALLBACK_IMAGE_URL = 'https://horizons-cdn.hostinger.com/13cfa1c3-d941-4ee5-a55f-474bf3bd73ff/b07ebb07df6a9ef671ed2ec1184247a6.jpg';
 
@@ -242,8 +242,8 @@ function CampaignDetailPage({ id }) {
                             Fully Support
                           </Badge>
                         ) : (
-                          <Badge variant="outline">
-                            {campaign.status || 'Sedang berjalan'}
+                          <Badge variant="outline" className="capitalize">
+                            {campaign.status.toLowerCase() || 'Sedang berjalan'}
                           </Badge>
                         )}
                       </div>
