@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import NextImage from 'next/image';
 import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 
@@ -64,6 +65,12 @@ function normalizeSlides(sliderContent, fallbackImageUrl) {
   return fallbackImageUrl ? [{ url: fallbackImageUrl, isVideo: false }] : [];
 }
 
+function getOptimizedImageUrl(imageUrl, width = 1200, quality = 75) {
+  if (!imageUrl || imageUrl.startsWith('data:')) return imageUrl;
+
+  return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=${width}&q=${quality}`;
+}
+
 export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
@@ -72,6 +79,22 @@ export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
   const hasMultipleSlides = slides.length > 1;
   const isFirstSlide = currentSlide === 0;
   const isLastSlide = currentSlide === slides.length - 1;
+
+  useEffect(() => {
+    const preloadedImages = slides
+      .filter((slide) => !slide.isVideo)
+      .map((slide) => {
+        const image = new window.Image();
+        image.src = getOptimizedImageUrl(slide.url);
+        return image;
+      });
+
+    return () => {
+      preloadedImages.forEach((image) => {
+        image.src = '';
+      });
+    };
+  }, [slides]);
 
   // Minimum distance to register a swipe
   const minSwipeDistance = 50;
@@ -149,10 +172,14 @@ export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
                 draggable="false"
               />
             ) : (
-              <img
+              <NextImage
                 src={slide.url}
                 alt={`${altText} - Photo ${index + 1}`}
-                className="w-full h-full object-cover img-enhanced pointer-events-none"
+                fill
+                sizes="(min-width: 1024px) 66vw, 100vw"
+                preload={index === 0}
+                loading={index === 0 ? undefined : 'eager'}
+                className="object-cover img-enhanced pointer-events-none"
                 draggable="false"
               />
             )}
