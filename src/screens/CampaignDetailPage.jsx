@@ -179,7 +179,7 @@ function CampaignDetailPage({ id }) {
   // Mock data for fields not in the database schema to keep the UI rich
   const mockDonationTiers = [
     { amount: 50000},
-    { amount: 150000},
+    { amount: 100000},
     { amount: 500000 },
     { amount: 1000000 }
   ];

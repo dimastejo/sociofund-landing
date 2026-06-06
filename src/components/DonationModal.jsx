@@ -18,7 +18,7 @@ import { Check, Copy } from "lucide-react";
 import ImageUploader from "@/components/ImageUploader.jsx";
 import apiClient from "@/lib/apiClient.js";
 
-const presetAmounts = [50000, 150000, 500000, 1000000];
+const presetAmounts = [50000, 100000, 500000, 1000000];
 const SUBSCRIBER_TYPES = {
   direct: "direct",
   external: "external",
