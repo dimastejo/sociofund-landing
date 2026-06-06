@@ -211,7 +211,7 @@ function CampaignsPage() {
                 Semua kampanye
               </h1>
               <p className="text-lg text-muted-foreground max-w-2xl">
-                Temukan kampanye pendidikan yang ingin Anda dukung
+                Temukan kampanye pendidikan yang tersedia
               </p>
             </div>
           </div>
