@@ -75,10 +75,12 @@ export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
+  const [imageRatios, setImageRatios] = useState({});
   const slides = useMemo(() => normalizeSlides(sliderContent, imageUrl), [sliderContent, imageUrl]);
   const hasMultipleSlides = slides.length > 1;
   const isFirstSlide = currentSlide === 0;
   const isLastSlide = currentSlide === slides.length - 1;
+  const currentSlideRatio = imageRatios[currentSlide] || 4 / 3;
 
   useEffect(() => {
     const preloadedImages = slides
@@ -145,13 +147,34 @@ export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
     setCurrentSlide((slide) => Math.min(slide + 1, slides.length - 1));
   };
 
+  const handleImageLoad = (index, event) => {
+    const image = event.currentTarget;
+    const naturalRatio = image.naturalWidth && image.naturalHeight
+      ? image.naturalWidth / image.naturalHeight
+      : null;
+
+    if (!naturalRatio) return;
+
+    setImageRatios((ratios) => {
+      if (ratios[index] === naturalRatio) return ratios;
+
+      return {
+        ...ratios,
+        [index]: naturalRatio,
+      };
+    });
+  };
+
   if (slides.length === 0) return null;
 
   return (
     <div className="relative w-full overflow-hidden rounded-2xl shadow-sm border border-border/50 bg-muted group">
       <div
-        className="flex transition-transform duration-500 ease-out h-[300px] sm:h-[400px] cursor-grab active:cursor-grabbing"
-        style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+        className="flex transition-[transform,height] duration-500 ease-out w-full cursor-grab active:cursor-grabbing"
+        style={{
+          aspectRatio: currentSlideRatio,
+          transform: `translateX(-${currentSlide * 100}%)`,
+        }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEndHandler}
@@ -179,7 +202,8 @@ export default function CampaignGallery({ imageUrl, altText, sliderContent }) {
                 sizes="(min-width: 1024px) 66vw, 100vw"
                 preload={index === 0}
                 loading={index === 0 ? undefined : 'eager'}
-                className="object-cover img-enhanced pointer-events-none"
+                className="object-contain img-enhanced pointer-events-none"
+                onLoad={(event) => handleImageLoad(index, event)}
                 draggable="false"
               />
             )}

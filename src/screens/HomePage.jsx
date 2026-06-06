@@ -388,7 +388,7 @@ function HomePage() {
           {content.imageUrl ? (
             <img
               src={content.imageUrl}
-              alt={content.heroText || "SocioFund hero"}
+              alt={content.heroText || "Sociofund hero"}
               className="w-full h-full object-cover"
             />
           ) : null}
