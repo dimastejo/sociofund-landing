@@ -27,6 +27,7 @@ const PAYMENT_METHODS = {
   midtrans: "midtrans",
   manual: "manual",
 };
+const IS_MIDTRANS_ENABLED = false;
 
 function encodeDonationCode(donationCode) {
   if (typeof window === "undefined") return donationCode;
@@ -65,7 +66,10 @@ async function fetchDonationDetail(donationCode) {
 }
 
 async function submitPaymentProof(payload) {
-  const response = await apiClient.post("/v1/socio/donation/payment-proof", payload);
+  const response = await apiClient.post(
+    "/v1/socio/donation/payment-proof",
+    payload,
+  );
   const data = response.data;
 
   if (data?.valid === false) {
@@ -157,11 +161,12 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     staleTime: 1000 * 60 * 5,
     retry: 1,
   });
-  const { data: socioSettings = {}, isLoading: isSocioSettingsLoading } = useQuery({
-    queryKey: ["socio-settings", "manual-payment"],
-    queryFn: fetchSocioSettings,
-    staleTime: 1000 * 60 * 10,
-  });
+  const { data: socioSettings = {}, isLoading: isSocioSettingsLoading } =
+    useQuery({
+      queryKey: ["socio-settings", "manual-payment"],
+      queryFn: fetchSocioSettings,
+      staleTime: 1000 * 60 * 10,
+    });
   const manualPaymentInfo = {
     bank: socioSettings.bank || "",
     accountNumber: socioSettings.no_rekening || "",
@@ -238,10 +243,10 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setIsSubmitting(true);
 
     try {
-      if (paymentMethod === PAYMENT_METHODS.midtrans) {
-        await handleMidtrans();
-        return;
-      }
+      // if (paymentMethod === PAYMENT_METHODS.midtrans) {
+      //   await handleMidtrans();
+      //   return;
+      // }
 
       if (paymentMethod === PAYMENT_METHODS.manual) {
         await handleManualPayment();
@@ -379,7 +384,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     setSelectedAmount(null);
     setCustomAmount("");
     setSubscriberType(SUBSCRIBER_TYPES.direct);
-    setPaymentMethod(PAYMENT_METHODS.midtrans);
+    setPaymentMethod(PAYMENT_METHODS.manual);
     setDonorInfo({ name: "", email: "", phone: "" });
     setMessage("");
     setAgreedToTerms(false);
@@ -408,6 +413,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   };
 
   useEffect(() => {
+    if (!IS_MIDTRANS_ENABLED) return undefined;
+
     // You can also change below url value to any script url you wish to load,
     // for example this is snap.js for Sandbox Env (Note: remove `.sandbox` from url if you want to use production version)
     const midtransScriptUrl = "https://app.sandbox.midtrans.com/snap/snap.js";
@@ -449,9 +456,9 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const encodedDonationCode = new URLSearchParams(window.location.search).get(
-      "donation_code",
-    ) || new URLSearchParams(window.location.search).get("donationcode");
+    const encodedDonationCode =
+      new URLSearchParams(window.location.search).get("donation_code") ||
+      new URLSearchParams(window.location.search).get("donationcode");
     if (!encodedDonationCode) return;
 
     setQueryDonationCode(encodedDonationCode);
@@ -470,7 +477,8 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
       donationCode: queryDonationCode,
       encryptedDonationCode: queryDonationCode,
       displayDonationCode,
-      amount: Number(queryDonation.amount) || Number(queryDonation.nominal) || 0,
+      amount:
+        Number(queryDonation.amount) || Number(queryDonation.nominal) || 0,
       paymentStatus: queryDonation.payment_status || "",
     });
     setPaymentProofUrl(proofUrl);
@@ -510,12 +518,19 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
             </DialogHeader>
 
             <div className="space-y-6 mt-4">
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                <p className="text-sm text-blue-700">
+                  Link konfirmasi pembayaran juga telah dikirim ke email Anda.
+                </p>
+              </div>
+
               <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Kode donasi</p>
                     <p className="text-base font-semibold text-foreground">
-                      {manualPayment.displayDonationCode || manualPayment.donationCode}
+                      {manualPayment.displayDonationCode ||
+                        manualPayment.donationCode}
                     </p>
                   </div>
                   {manualPayment.amount > 0 && (
@@ -619,7 +634,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                       ? "Bukti sudah dikirim"
                       : isUploadingProof || isSubmitting
                         ? "Mengirim..."
-                      : "Kirim bukti pembayaran"}
+                        : "Kirim bukti pembayaran"}
                 </Button>
                 <Button
                   type="button"
@@ -742,16 +757,14 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                 <div>
                   <Label htmlFor="email">
                     Email
-                    {isDirectParticipant && (
-                      <span className="ml-1 text-xs font-medium text-destructive">
-                        *harus diisi
-                      </span>
-                    )}
+                    <span className="ml-1 text-xs font-medium text-destructive">
+                      *harus diisi
+                    </span>
                   </Label>
                   <Input
                     id="email"
                     type="email"
-                    required={isDirectParticipant}
+                    required={true}
                     value={donorInfo.email}
                     onChange={(e) =>
                       setDonorInfo({ ...donorInfo, email: e.target.value })
