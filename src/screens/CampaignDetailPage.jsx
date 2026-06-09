@@ -325,7 +325,7 @@ function CampaignDetailPage({ id }) {
                           <Separator className="my-8" />
 
                           <div>
-                            <h2 className="text-2xl font-bold mb-6 text-foreground">Tingkat donasi</h2>
+                            <h2 className="text-2xl font-bold mb-6 text-foreground">Jumlah Nominal</h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               {mockDonationTiers.map((tier, index) => (
                                 <Card

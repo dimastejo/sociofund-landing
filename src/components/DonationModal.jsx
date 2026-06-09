@@ -45,7 +45,7 @@ async function createDonation(payload) {
   const donationCode = data.donation_code || data.data?.donation_code;
 
   if (!donationCode) {
-    throw new Error(data.message || "Kode donasi tidak tersedia");
+    throw new Error(data.message || "Kode tidak tersedia");
   }
 
   return { data, donationCode };
@@ -223,7 +223,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     e.preventDefault();
 
     if (getFinalAmount() < 10000) {
-      toast.error("Minimum donasi adalah Rp 10.000");
+      toast.error("Minimum jumlah adalah Rp 10.000");
       return;
     }
 
@@ -257,7 +257,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
       setIsSubmitting(false);
     } catch (error) {
       console.error("Error processing donation:", error);
-      toast.error("Gagal memproses donasi. Silakan coba lagi.");
+      toast.error("Gagal memproses submission. Silakan coba lagi.");
       setIsSubmitting(false);
     }
   };
@@ -293,7 +293,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
           setShowSuccess(false);
           onClose();
           resetForm();
-          toast.success("Terima kasih atas donasi Anda");
+          toast.success("Terima kasih atas program submission Anda");
         }, 3000);
       },
       onPending: () => {
@@ -356,7 +356,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     }
 
     if (!manualPayment?.donationCode) {
-      toast.error("Kode donasi tidak tersedia");
+      toast.error("Kode tidak tersedia");
       return;
     }
 
@@ -490,7 +490,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
     if (!isQueryDonationError) return;
 
     console.error("Error fetching donation:", queryDonationError);
-    toast.error("Kode donasi tidak valid");
+    toast.error("Kode tidak valid");
     removeDonationCodeQuery();
     setQueryDonationCode("");
   }, [isQueryDonationError, queryDonationError]);
@@ -527,7 +527,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
               <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Kode donasi</p>
+                    <p className="text-sm text-muted-foreground">Kode pembayaran</p>
                     <p className="text-base font-semibold text-foreground">
                       {manualPayment.displayDonationCode ||
                         manualPayment.donationCode}
@@ -658,7 +658,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                 {campaign.title}
               </DialogTitle>
               <DialogDescription>
-                Pilih jumlah donasi dan lengkapi informasi Anda
+                Pilih nominal dan lengkapi informasi Anda
               </DialogDescription>
             </DialogHeader>
 
@@ -816,7 +816,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
                   htmlFor="terms"
                   className="text-sm cursor-pointer leading-relaxed"
                 >
-                  Saya setuju dengan syarat dan ketentuan donasi serta kebijakan
+                  Saya setuju dengan syarat dan ketentuan program submission serta kebijakan
                   privasi Education Crowdfunding
                 </Label>
               </div>
@@ -839,7 +839,7 @@ function DonationModal({ isOpen, onClose, campaign, initialAmount }) {
             </div>
             <h3 className="text-2xl font-bold mb-3">Donasi berhasil</h3>
             <p className="text-muted-foreground mb-2">
-              Terima kasih atas donasi Anda sebesar{" "}
+              Terima kasih atas pembayaran Anda sebesar{" "}
               {formatCurrency(getFinalAmount())}
             </p>
             <p className="text-sm text-muted-foreground">
