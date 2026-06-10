@@ -27,6 +27,7 @@ import {
 
 const PILLAR_ICONS = [Handshake, GraduationCap, Microscope, School];
 const CAMPAIGNS_API_URL = "https://sdvapp.cloud/api/v1/socio/campaigns?status=active";
+const CAMPAIGN_SUMMARY_API_URL = "https://sdvapp.cloud/api/v1/socio/campaign/summary";
 const ICON_BY_NAME = {
   handshake: Handshake,
   graduation: GraduationCap,
@@ -112,6 +113,68 @@ async function fetchCampaigns() {
   }
 
   return result.data.map(normalizeCampaign);
+}
+
+async function fetchCampaignSummary() {
+  const response = await fetch(CAMPAIGN_SUMMARY_API_URL);
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.valid || !result.data) {
+    throw new Error(result.message || "Format data summary kampanye tidak valid");
+  }
+
+  return result.data;
+}
+
+function formatCount(value, suffix) {
+  return `${Number(value) || 0} ${suffix}`;
+}
+
+function formatRupiahCompact(value) {
+  const amount = Number(value) || 0;
+
+  if (amount >= 1000000000) {
+    return `Rp ${(amount / 1000000000).toLocaleString("id-ID", {
+      maximumFractionDigits: 2,
+    })} miliar`;
+  }
+
+  if (amount >= 1000000) {
+    return `Rp ${(amount / 1000000).toLocaleString("id-ID", {
+      maximumFractionDigits: 2,
+    })} juta`;
+  }
+
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function getImpactStats(summary = {}) {
+  return [
+    {
+      label: "Total dana terkumpul",
+      value: formatRupiahCompact(summary.total_donations),
+      icon: TrendingUp,
+    },
+    {
+      label: "Kampanye didanai",
+      value: formatCount(summary.total_campaigns, "kampanye"),
+      icon: BookOpen,
+    },
+    {
+      label: "Total partisipan",
+      value: formatCount(summary.total_donors, "orang"),
+      icon: Users,
+    },
+  ];
 }
 
 function SectionHeadingSkeleton({ muted = false }) {
@@ -232,7 +295,7 @@ function renderTestimonialSectionSkeleton() {
   );
 }
 
-function renderDampak() {
+function renderDampak(stats, isLoading = false) {
   return (
     <section className="py-20 bg-background" key={999}>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -259,12 +322,16 @@ function renderDampak() {
                     <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <Icon className="w-8 h-8 text-primary" />
                     </div>
-                    <p
-                      className="text-4xl font-bold text-primary mb-2"
-                      style={{ fontVariantNumeric: "tabular-nums" }}
-                    >
-                      {stat.value}
-                    </p>
+                    {isLoading ? (
+                      <Skeleton className="h-10 w-36 mx-auto mb-2" />
+                    ) : (
+                      <p
+                        className="text-4xl font-bold text-primary mb-2"
+                        style={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {stat.value}
+                      </p>
+                    )}
                     <p className="text-muted-foreground font-medium">
                       {stat.label}
                     </p>
@@ -305,24 +372,6 @@ function renderEmptySections() {
     </section>
   );
 }
-
-const stats = [
-  {
-    label: "Total dana terkumpul",
-    value: "Rp 46,5 juta",
-    icon: TrendingUp,
-  },
-  {
-    label: "Kampanye didanai",
-    value: "6 kampanye",
-    icon: BookOpen,
-  },
-  {
-    label: "Total donatur",
-    value: "359 orang",
-    icon: Users,
-  },
-];
 
 const steps = [
   {
@@ -367,6 +416,18 @@ function HomePage() {
     queryKey: ["campaigns"],
     queryFn: fetchCampaigns,
   });
+  const {
+    data: campaignSummary,
+    isLoading: isCampaignSummaryLoading,
+  } = useQuery({
+    queryKey: ["campaign-summary"],
+    queryFn: fetchCampaignSummary,
+  });
+
+  const impactStats = useMemo(
+    () => getImpactStats(campaignSummary),
+    [campaignSummary],
+  );
 
   const sortedCampaigns = useMemo(() => {
     return [...campaigns].sort((a, b) => {
@@ -682,7 +743,7 @@ function HomePage() {
       case "cara-kerja":
         return renderCaraKerja();
       case "dampak":
-        return renderDampak();
+        return renderDampak(impactStats, isCampaignSummaryLoading);
       case "testimoni":
         return renderTestimonialSection(section);
       default:
