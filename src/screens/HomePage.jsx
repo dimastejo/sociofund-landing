@@ -383,7 +383,7 @@ const steps = [
   },
   {
     number: "02",
-    title: "Donasi",
+    title: "Program Submission",
     description:
       "Berikan kontribusi sesuai kemampuan Anda dengan proses yang mudah dan aman",
     icon: Heart,
