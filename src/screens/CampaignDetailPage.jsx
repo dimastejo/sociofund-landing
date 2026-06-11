@@ -16,7 +16,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Calendar, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
+import { Users, Calendar, ArrowLeft, AlertCircle, CheckCircle, MessageCircle, Quote } from 'lucide-react';
 
 const CAMPAIGNS_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaigns?status=active';
 const CAMPAIGN_DETAIL_API_URL = 'https://sdvapp.cloud/api/v1/socio/campaign';
@@ -189,6 +196,10 @@ function CampaignDetailPage({ id }) {
     { event: "Target Selesai", date: new Date(new Date(campaign.created).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() }
   ];
 
+  const supportMessages = Array.isArray(campaign.messages)
+    ? campaign.messages.filter((item) => item?.message?.trim())
+    : [];
+
   const openDonationModal = (amount = null) => {
     if (isFullyFunded) return;
 
@@ -319,6 +330,71 @@ function CampaignDetailPage({ id }) {
                           )}
                         </div>
                       </div>
+
+                      {supportMessages.length > 0 && (
+                        <>
+                          <Separator className="my-8" />
+
+                          <div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
+                              <div>
+                                <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary mb-3">
+                                  <MessageCircle className="h-4 w-4" />
+                                  Pesan dukungan
+                                </div>
+                                <h2 className="text-2xl font-bold text-foreground">Pesan dari supporter</h2>
+                              </div>
+                            </div>
+
+                            <Carousel
+                              opts={{
+                                align: "start",
+                              }}
+                              className="w-full"
+                            >
+                              <CarouselContent className="-ml-4">
+                                {supportMessages.map((supportMessage, index) => {
+                                  const donorName = supportMessage.donor_name || 'Supporter';
+                                  const initials = donorName
+                                    .split(" ")
+                                    .filter(Boolean)
+                                    .slice(0, 2)
+                                    .map((word) => word[0])
+                                    .join("")
+                                    .toUpperCase();
+
+                                  return (
+                                    <CarouselItem key={`${donorName}-${index}`} className="pl-4 md:basis-1/2">
+                                      <Card className="h-full border-border/50 bg-background shadow-sm">
+                                        <CardContent className="flex h-full flex-col p-5">
+                                          <div className="mb-5 flex items-start justify-between gap-4">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                                                {initials || 'S'}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <p className="truncate font-semibold text-foreground">{donorName}</p>
+                                              </div>
+                                            </div>
+                                            <Quote className="h-5 w-5 flex-shrink-0 text-primary/50" />
+                                          </div>
+
+                                          <p className="flex-1 text-sm leading-relaxed text-muted-foreground">
+                                            "{supportMessage.message}"
+                                          </p>
+                                        </CardContent>
+                                      </Card>
+                                    </CarouselItem>
+                                  );
+                                })}
+                              </CarouselContent>
+                              <CarouselPrevious className="left-0 top-[calc(100%+1rem)] translate-y-0 sm:-left-4 sm:top-1/2 sm:-translate-y-1/2" />
+                              <CarouselNext className="left-10 top-[calc(100%+1rem)] translate-y-0 sm:left-auto sm:-right-4 sm:top-1/2 sm:-translate-y-1/2" />
+                            </Carousel>
+                            <div className="h-12 sm:hidden" />
+                          </div>
+                        </>
+                      )}
 
                       {!isFullyFunded && (
                         <>
